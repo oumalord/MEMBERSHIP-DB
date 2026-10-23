@@ -10,17 +10,19 @@ import Messages from './sections/Messages';
 import Events from './sections/Events';
 import Reports from './sections/Reports';
 import AdminAccounts from './sections/AdminAccounts';
+import AccountRegistration from './sections/AccountRegistration';
 import IndividualDashboard from './sections/IndividualDashboard';
 import InstitutionDashboard from './sections/InstitutionDashboard';
 import { LayoutDashboard, Users, Receipt, Mail, CalendarDays, BarChart3, ShieldCheck, LogOut, Menu, X, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import type { AdminAccount as AdminAccountRecord, Institution, Member } from './types';
 
-type AdminTab = 'dashboard' | 'members' | 'transactions' | 'messages' | 'events' | 'reports' | 'accounts' | 'settings';
+type AdminTab = 'dashboard' | 'members' | 'registrations' | 'transactions' | 'messages' | 'events' | 'reports' | 'accounts' | 'settings';
 type Portal = 'admin' | 'institution' | 'individual' | null;
 
 const ADMIN_NAV: { key: AdminTab; label: string; icon: LucideIcon }[] = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'members', label: 'Members', icon: Users },
+  { key: 'registrations', label: 'Create Accounts', icon: Users },
   { key: 'transactions', label: 'Invoices & Receipts', icon: Receipt },
   { key: 'messages', label: 'Messages', icon: Mail },
   { key: 'events', label: 'Events', icon: CalendarDays },
@@ -147,7 +149,12 @@ export default function App() {
   if (portal === 'admin' && adminMe) {
     const canEdit = adminMe.canEdit;
     const canManageAdmins = adminMe.isSuperAdmin || adminMe.canManageAdmins;
-    const nav = ADMIN_NAV.filter((n) => (n.key === 'settings' ? adminMe.isSuperAdmin : n.key !== 'accounts' || canManageAdmins));
+    const nav = ADMIN_NAV.filter((n) => {
+      if (n.key === 'settings') return adminMe.isSuperAdmin;
+      if (n.key === 'accounts') return canManageAdmins;
+      if (n.key === 'registrations') return canEdit;
+      return true;
+    });
     return (
       <Shell
         title={branding.orgName}
@@ -160,6 +167,7 @@ export default function App() {
       >
         {adminTab === 'dashboard' && <Dashboard />}
         {adminTab === 'members' && <Members canEdit={canEdit} />}
+        {adminTab === 'registrations' && canEdit && <AccountRegistration />}
         {adminTab === 'transactions' && <Transactions canEdit={canEdit} />}
         {adminTab === 'messages' && <Messages canEdit={canEdit} />}
         {adminTab === 'events' && <Events canEdit={canEdit} />}
@@ -217,4 +225,3 @@ function Shell({ title, subtitle, nav = [], activeKey, onNavigate, user, onSignO
     </div>
   );
 }
-

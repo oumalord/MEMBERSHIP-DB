@@ -29,6 +29,19 @@ function ageFromDob(dob?: string): number | null {
   return age;
 }
 
+// The guide unit is always derived from the date of birth, never typed in.
+function unitForDob(dob?: string): string {
+  const age = ageFromDob(dob);
+  return age === null ? 'Unassigned' : branchForAge(age);
+}
+
+function validDob(dob?: string): string | null {
+  const age = ageFromDob(dob);
+  if (age === null) return 'A valid date of birth is required to place the member in a guide unit.';
+  if (age < 0 || age > 120) return 'Date of birth is not valid.';
+  return null;
+}
+
 function today(): string { return new Date().toISOString().slice(0, 10); }
 function plusDays(days: number): string { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); }
 function daysBetween(dateStr: string): number { const d = new Date(dateStr); const now = new Date(); return Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24)); }
@@ -140,11 +153,13 @@ export const handler = router({
     if (existing.items.length > 0) return json(existing.items[0]);
     const body = ctx.body as Partial<Member>;
     if (!body.name || !body.name.trim()) return error('Full name is required', 400);
+    const dobErr = validDob(body.dob);
+    if (dobErr) return error(dobErr, 400);
     const record: Member = {
       name: body.name.trim(), phone: body.phone || '', email: body.email || ctx.user.email || '', dob: body.dob || '',
-      branch: 'Adult Leader', region: body.town || body.region || '', guardianName: '',
+      branch: unitForDob(body.dob), region: body.town || body.region || '', guardianName: body.guardianName || '',
       status: 'active', joinedDate: today(), subscriptionExpiry: plusDays(365), ownerUserId: ctx.user.userId, source: 'self',
-      memberType: 'adult', idNo: body.idNo || '', maritalStatus: body.maritalStatus || '', poBox: body.poBox || '', town: body.town || '',
+      memberType: (ageFromDob(body.dob) ?? 18) >= 18 ? 'adult' : 'youth', idNo: body.idNo || '', maritalStatus: body.maritalStatus || '', poBox: body.poBox || '', town: body.town || '',
       occupation: body.occupation || '', employer: body.employer || '', workPhone: body.workPhone || '', workEmail: body.workEmail || '', otherSkills: body.otherSkills || '',
       nextOfKinName: body.nextOfKinName || '', nextOfKinRelationship: body.nextOfKinRelationship || '', nextOfKinPhone: body.nextOfKinPhone || '', nextOfKinEmail: body.nextOfKinEmail || '',
       yearJoinedGuiding: body.yearJoinedGuiding || '', levelsUndertaken: body.levelsUndertaken || '', trainingsReceived: body.trainingsReceived || '', guidingAwards: body.guidingAwards || '',
@@ -222,12 +237,14 @@ export const handler = router({
   'POST /api/institution/members': [requireAuth(), requireInstitutionSession(), async (ctx: any) => {
     const body = ctx.body as Partial<Member>;
     if (!body.name || !body.name.trim()) return error('Student name is required', 400);
+    const dobErr = validDob(body.dob);
+    if (dobErr) return error(dobErr, 400);
     const age = ageFromDob(body.dob);
     const record: Member = {
       name: body.name.trim(), phone: body.phone || '', email: body.email || '', dob: body.dob || '',
-      branch: (body.branch && body.branch.trim()) || (age !== null ? branchForAge(age) : 'Unassigned'),
+      branch: branchForAge(age!),
       region: body.region || '', guardianName: body.guardianName || '', status: 'active', joinedDate: today(), subscriptionExpiry: plusDays(365),
-      institutionId: ctx.institution.id, institutionName: ctx.institution.name, source: 'institution', memberType: 'youth',
+      institutionId: ctx.institution.id, institutionName: ctx.institution.name, source: 'institution', memberType: age! >= 18 ? 'adult' : 'youth',
       membershipNo: body.membershipNo || '', interests: body.interests || '', guardianPhone: body.guardianPhone || '',
     };
     const [id] = await db.add('members', [record]);
@@ -239,7 +256,9 @@ export const handler = router({
     const [existing] = await db.get<Member>('members', [ctx.params.id]);
     if (!existing || existing.institutionId !== ctx.institution.id) return error('Student not found', 404);
     const body = ctx.body as Partial<Member>;
+    if (body.dob !== undefined) { const e = validDob(body.dob); if (e) return error(e, 400); }
     const merged = { ...existing, ...body, institutionId: ctx.institution.id, institutionName: ctx.institution.name, source: 'institution' as const };
+    merged.branch = unitForDob(merged.dob);
     const [ok] = await db.update('members', [{ id: ctx.params.id, record: merged }]);
     if (!ok) return error('Failed to update student', 500);
     return json({ id: ctx.params.id, ...merged });
@@ -366,14 +385,41 @@ export const handler = router({
   'POST /api/admin/members': [requireAuth(), requireAdminSession(), requireEditRights(), async (ctx: any) => {
     const body = ctx.body as Partial<Member>;
     if (!body.name || !body.name.trim()) return error('Member name is required', 400);
+    const dobErr = validDob(body.dob);
+    if (dobErr) return error(dobErr, 400);
+    const loginUserId = (ctx.body as any).__loginUserId as string | undefined;
     const age = ageFromDob(body.dob);
     const record: Member = {
       name: body.name.trim(), phone: body.phone || '', email: body.email || '', dob: body.dob || '',
-      branch: age !== null ? branchForAge(age) : 'Unassigned', region: body.region || '', guardianName: body.guardianName || '',
-      status: 'active', joinedDate: today(), subscriptionExpiry: plusDays(365), source: 'admin', memberType: 'youth',
+      branch: branchForAge(age!), region: body.region || '', guardianName: body.guardianName || '',
+      status: 'active', joinedDate: today(), subscriptionExpiry: plusDays(365), source: 'admin',
+      memberType: age! >= 18 ? 'adult' : 'youth',
+      ...(loginUserId ? { ownerUserId: loginUserId } : {}),
     };
     const [id] = await db.add('members', [record]);
     if (!id) return error('Failed to create member', 500);
+    return json({ id, ...record }, 201);
+  }],
+
+  'GET /api/admin/institutions': [requireAuth(), requireAdminSession(), async () => {
+    const { items } = await db.list<InstitutionRecord>('institutions', { limit: 500 });
+    const { items: members } = await db.list<Member>('members', { limit: 5000 });
+    const counts = new Map<string, number>();
+    for (const m of members) if (m.institutionId) counts.set(m.institutionId, (counts.get(m.institutionId) || 0) + 1);
+    return json({ items: items.map((i) => ({ ...i, memberCount: counts.get(i.id) || 0 })).sort((a, b) => a.name.localeCompare(b.name)) });
+  }],
+
+  'POST /api/admin/institutions': [requireAuth(), requireAdminSession(), requireEditRights(), async (ctx: any) => {
+    const body = ctx.body as Partial<InstitutionRecord> & { __loginUserId?: string };
+    if (!body.name || !body.name.trim()) return error('Institution name is required', 400);
+    if (!body.__loginUserId) return error('Institution login could not be created', 400);
+    const record: InstitutionRecord = {
+      userId: body.__loginUserId, name: body.name.trim(), email: body.email || '', phone: body.phone || '', address: body.address || '',
+      county: body.county || '', subCounty: body.subCounty || '', principalName: body.principalName || '', principalMobile: body.principalMobile || '', principalEmail: body.principalEmail || '',
+      noOfUnits: body.noOfUnits || '', noOfGuidesInUnit: body.noOfGuidesInUnit || '', guideLeaderName: body.guideLeaderName || '', guideLeaderPhone: body.guideLeaderPhone || '', guideLeaderEmail: body.guideLeaderEmail || '', meetingDayTime: body.meetingDayTime || '',
+    };
+    const [id] = await db.add('institutions', [record]);
+    if (!id) return error('Failed to create institution account', 500);
     return json({ id, ...record }, 201);
   }],
 
@@ -381,7 +427,11 @@ export const handler = router({
     const [existing] = await db.get<Member>('members', [ctx.params.id]);
     if (!existing) return error('Member not found', 404);
     const body = ctx.body as Partial<Member>;
-    const merged = { ...existing, ...body };
+    if (body.dob !== undefined) { const e = validDob(body.dob); if (e) return error(e, 400); }
+    const merged: any = { ...existing, ...body };
+    delete merged.__loginUserId;
+    merged.ownerUserId = existing.ownerUserId;
+    if (!existing.institutionId) merged.branch = unitForDob(merged.dob);
     const [ok] = await db.update('members', [{ id: ctx.params.id, record: merged }]);
     if (!ok) return error('Failed to update member', 500);
     return json({ id: ctx.params.id, ...merged });

@@ -5,6 +5,21 @@ import type { Member, Transaction } from '../types';
 const BRANCHES = ['Rainbow', 'Brownie', 'Girl Guide', 'Ranger Guide', 'Adult Leader', 'Unassigned'];
 const STATUSES = ['active', 'pending', 'suspended', 'expelled'];
 
+function guideUnitForDob(dob: string) {
+  if (!dob) return '';
+  const birth = new Date(`${dob}T00:00:00`);
+  if (Number.isNaN(birth.getTime())) return '';
+  const now = new Date();
+  let age = now.getFullYear() - birth.getFullYear();
+  if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
+  if (age < 0 || age > 120) return 'Invalid date of birth';
+  if (age <= 6) return age >= 5 ? 'Rainbow' : 'Not eligible for a unit';
+  if (age <= 9) return 'Brownie';
+  if (age <= 14) return 'Girl Guide';
+  if (age <= 17) return 'Ranger Guide';
+  return 'Adult Leader';
+}
+
 export default function Members({ canEdit }: { canEdit: boolean }) {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -119,6 +134,7 @@ function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 
   const submit = async () => {
     if (!form.name.trim()) { setErr('Name is required.'); return; }
+    if (!form.dob) { setErr('Date of birth is required to assign a guide unit.'); return; }
     setSaving(true); setErr('');
     try {
       await api.post('/api/admin/members', form);
@@ -136,7 +152,10 @@ function AddMemberModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         <div className="modal-title">Add Member</div>
         <div className="field"><label className="field-label">Full Name *</label><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div className="field-grid">
-          <div><label className="field-label">Date of Birth</label><input type="date" className="input" value={form.dob} onChange={(e) => set('dob', e.target.value)} /></div>
+          <div><label className="field-label">Date of Birth *</label><input type="date" required max={new Date().toISOString().slice(0, 10)} className="input" value={form.dob} onChange={(e) => set('dob', e.target.value)} /></div>
+          <div><label className="field-label">Guide unit (assigned by age)</label><input className="input" readOnly value={guideUnitForDob(form.dob) || 'Enter date of birth'} /></div>
+        </div>
+        <div className="field-grid">
           <div><label className="field-label">Region / County</label><input className="input" value={form.region} onChange={(e) => set('region', e.target.value)} /></div>
         </div>
         <div className="field-grid">

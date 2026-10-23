@@ -43,6 +43,10 @@ async function createUser(email: string, password: string, name = '') {
   return user;
 }
 
+async function deleteUser(userId: string) {
+  await pool().query('DELETE FROM auth_users WHERE id = $1', [userId]);
+}
+
 async function issueToken(userId: string) {
   const token = randomBytes(32).toString('hex');
   await pool().query('INSERT INTO auth_sessions (token, user_id, expires_at) VALUES ($1,$2,$3)', [token, userId, Date.now() + SESSION_MS]);
@@ -160,6 +164,27 @@ export async function handle(req: IncomingMessage, res: ServerResponse) {
     if (auth) return send(auth);
 
     const me = await sessionUser(req);
+
+    const createAccountMatch = /^\/api\/admin\/accounts\/(individual|institution)$/.exec(url.pathname);
+    if (method === 'POST' && createAccountMatch && me) {
+      const email = normEmail(body.loginEmail);
+      const password = String(body.password || '');
+      const name = String(body.name || '').trim();
+      if (!validEmail(email)) return send(error('Enter a valid login email address.', 400));
+      if (password.length < MIN_PASSWORD) return send(error(`Set a temporary password of at least ${MIN_PASSWORD} characters.`, 400));
+      if (!name) return send(error('Name is required.', 400));
+      if (await findUser(email)) return send(error('An account with this email already exists.', 409));
+
+      const user = await createUser(email, password, name);
+      const target = createAccountMatch[1] === 'individual' ? '/api/admin/members' : '/api/admin/institutions';
+      const result = await handler('POST', target, {
+        user: me,
+        body: { ...body, email: body.email || email, __loginUserId: user.id },
+        query,
+      });
+      if (result.status >= 300) await deleteUser(user.id);
+      return send(result);
+    }
 
     // Inviting an admin who has no login yet also creates their login, so the Super Admin hands them the password.
     if (method === 'POST' && url.pathname === '/api/admin/accounts/invite' && me) {

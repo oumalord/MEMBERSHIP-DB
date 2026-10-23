@@ -3,6 +3,13 @@ import { api } from '../local-client';
 import type { Member, Category } from '../types';
 
 const DEFAULT_BRANCHES = ['Rainbow', 'Brownie', 'Girl Guide', 'Ranger Guide', 'Adult Leader'];
+const UNIT_AGES = [
+  { name: 'Rainbow', min: 5, max: 6 },
+  { name: 'Brownie', min: 7, max: 9 },
+  { name: 'Girl Guide', min: 10, max: 14 },
+  { name: 'Ranger Guide', min: 15, max: 17 },
+  { name: 'Adult Leader', min: 18, max: 120 },
+];
 
 export default function InstitutionDashboard() {
   const [tab, setTab] = useState<'members' | 'categories'>('members');
@@ -38,8 +45,6 @@ export default function InstitutionDashboard() {
     await api.delete(`/api/institution/members/${id}`);
     await load();
   };
-
-  const allCategories = [...DEFAULT_BRANCHES, ...categories.map((c) => c.name)];
 
   return (
     <div>
@@ -101,16 +106,25 @@ export default function InstitutionDashboard() {
         </div>
       )}
 
-      {showAdd && <AddStudentModal categories={allCategories} onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+      {showAdd && <AddStudentModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
     </div>
   );
 }
 
-function AddStudentModal({ categories, onClose, onSaved }: { categories: string[]; onClose: () => void; onSaved: () => void }) {
-  const [form, setForm] = useState({ name: '', dob: '', phone: '', email: '', region: '', guardianName: '', guardianPhone: '', branch: '', membershipNo: '', interests: '' });
+function AddStudentModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ name: '', dob: '', phone: '', email: '', region: '', guardianName: '', guardianPhone: '', membershipNo: '', interests: '' });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const age = form.dob ? (() => {
+    const birth = new Date(`${form.dob}T00:00:00`);
+    if (Number.isNaN(birth.getTime())) return null;
+    const now = new Date();
+    let value = now.getFullYear() - birth.getFullYear();
+    if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) value--;
+    return value;
+  })() : null;
+  const unit = age === null ? 'Enter date of birth' : UNIT_AGES.find((u) => age >= u.min && age <= u.max)?.name || 'Not eligible for a unit';
 
   const submit = async () => {
     if (!form.name.trim()) { setErr('Student name is required.'); return; }
@@ -127,13 +141,8 @@ function AddStudentModal({ categories, onClose, onSaved }: { categories: string[
         <div className="modal-title">Add Student</div>
         <div className="field"><label className="field-label">Full Name *</label><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
         <div className="field-grid">
-          <div><label className="field-label">Date of Birth</label><input type="date" className="input" value={form.dob} onChange={(e) => set('dob', e.target.value)} /></div>
-          <div><label className="field-label">Category</label>
-            <select className="input" value={form.branch} onChange={(e) => set('branch', e.target.value)}>
-              <option value="">Auto (by age)</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
+          <div><label className="field-label">Date of Birth *</label><input type="date" required max={new Date().toISOString().slice(0, 10)} className="input" value={form.dob} onChange={(e) => set('dob', e.target.value)} /></div>
+          <div><label className="field-label">Guide unit (assigned by age)</label><input className="input" readOnly value={unit} /></div>
         </div>
         <div className="field-grid">
           <div><label className="field-label">Membership No.</label><input className="input" value={form.membershipNo} onChange={(e) => set('membershipNo', e.target.value)} /></div>

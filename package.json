@@ -8,7 +8,7 @@
         "build": "npm run build:api && vite build",
         "preview": "vite preview",
         "server": "tsx watch server/index.ts",
-        "build:api": "esbuild server/vercel.ts --bundle --platform=node --format=esm --target=node20 --external:pg --alias:@appdeploy/sdk=./server/sdk.ts --outfile=api/index.js"
+        "build:api": "esbuild server/vercel.ts --bundle --platform=node --format=esm --target=node20 --external:pg --alias:@appdeploy/sdk=./server/sdk.ts --outfile=api/[...path].js"
     },
     "dependencies": {
         "lucide-react": "^0.469.0",
