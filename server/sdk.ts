@@ -1,7 +1,6 @@
 // Local stand-in for the AppDeploy runtime (`@appdeploy/sdk`) so backend/index.ts runs unchanged on this machine.
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { pool } from './pg';
 
 export interface HttpResult { status: number; body: unknown }
 export type Ctx = { user?: { userId: string; email?: string; name?: string }; body: any; params: Record<string, string>; query: Record<string, string> };
@@ -40,52 +39,50 @@ export function router(routes: Record<string, Step[]>) {
 }
 
 type Row = Record<string, any>;
-const DB_FILE = resolve(process.cwd(), 'data', 'db.json');
-const tables: Record<string, Record<string, Row>> = existsSync(DB_FILE) ? JSON.parse(readFileSync(DB_FILE, 'utf8')) : {};
 
-function persist() {
-  mkdirSync(dirname(DB_FILE), { recursive: true });
-  const tmp = DB_FILE + '.tmp';
-  writeFileSync(tmp, JSON.stringify(tables));
-  renameSync(tmp, DB_FILE);
-}
-
-const table = (name: string) => (tables[name] ??= {});
+// Each backend table is a Postgres table of (id, data jsonb); names are whitelisted because they are interpolated into SQL.
+export const TABLES = ['admins', 'communications', 'events', 'institution_categories', 'institutions', 'members', 'participations', 'settings', 'transactions'] as const;
+const table = (name: string) => {
+  if (!(TABLES as readonly string[]).includes(name)) throw new Error(`Unknown table: ${name}`);
+  return `"${name}"`;
+};
 
 export const db = {
   async list<T = Row>(name: string, opts: { filter?: Row; limit?: number } = {}): Promise<{ items: (T & { id: string })[] }> {
-    const filter = Object.entries(opts.filter || {});
-    const items = Object.entries(table(name))
-      .filter(([, rec]) => filter.every(([k, v]) => rec[k] === v))
-      .slice(0, opts.limit ?? 100)
-      .map(([id, rec]) => ({ id, ...rec }));
-    return { items: items as any };
+    const { rows } = await pool().query(
+      `SELECT id, data FROM ${table(name)} WHERE data @> $1::jsonb ORDER BY created_at, id LIMIT $2`,
+      [JSON.stringify(opts.filter || {}), opts.limit ?? 100],
+    );
+    return { items: rows.map((r) => ({ id: r.id, ...r.data })) as any };
   },
   async get<T = Row>(name: string, ids: string[]): Promise<((T & { id: string }) | undefined)[]> {
-    return ids.map((id) => (table(name)[id] ? ({ id, ...table(name)[id] } as any) : undefined));
+    if (ids.length === 0) return [];
+    const { rows } = await pool().query(`SELECT id, data FROM ${table(name)} WHERE id = ANY($1::uuid[])`, [ids]);
+    const byId = new Map(rows.map((r) => [r.id, { id: r.id, ...r.data }]));
+    return ids.map((id) => byId.get(id) as any);
   },
   async add(name: string, records: Row[]): Promise<string[]> {
-    const ids = records.map((rec) => {
-      const id = randomUUID();
-      table(name)[id] = rec;
-      return id;
-    });
-    persist();
+    const ids = records.map(() => randomUUID());
+    for (let i = 0; i < records.length; i++) {
+      await pool().query(`INSERT INTO ${table(name)} (id, data) VALUES ($1, $2::jsonb)`, [ids[i], JSON.stringify(records[i])]);
+    }
     return ids;
   },
   async update(name: string, updates: { id: string; record: Row }[]): Promise<boolean[]> {
-    const out = updates.map(({ id, record }) => {
-      if (!table(name)[id]) return false;
+    const out: boolean[] = [];
+    for (const { id, record } of updates) {
       const { id: _drop, ...rest } = record;
-      table(name)[id] = rest;
-      return true;
-    });
-    persist();
+      const r = await pool().query(`UPDATE ${table(name)} SET data = $2::jsonb WHERE id = $1`, [id, JSON.stringify(rest)]);
+      out.push((r.rowCount ?? 0) > 0);
+    }
     return out;
   },
   async delete(name: string, ids: string[]): Promise<boolean[]> {
-    const out = ids.map((id) => delete table(name)[id]);
-    persist();
+    const out: boolean[] = [];
+    for (const id of ids) {
+      const r = await pool().query(`DELETE FROM ${table(name)} WHERE id = $1`, [id]);
+      out.push((r.rowCount ?? 0) > 0);
+    }
     return out;
   },
 };

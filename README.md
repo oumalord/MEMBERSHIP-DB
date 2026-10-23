@@ -8,6 +8,15 @@ on the backend). It is **not** a standalone Node/Express project — the `db`, `
 `router`, `json`, and `error` helpers used throughout are provided by the AppDeploy
 runtime, not by a package you install yourself.
 
+## Run locally (PostgreSQL)
+
+`server/` is a local stand-in for the AppDeploy runtime that runs `backend/index.ts` unchanged and stores data in PostgreSQL.
+
+1. Create `.env` (git-ignored) with `DATABASE_URL`, `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` (min 8 chars) and optionally `SUPER_ADMIN_NAME`.
+2. `npm install` then `npm run dev` and open http://localhost:5173/.
+
+On startup the server creates any missing tables (one `(id uuid, data jsonb, created_at)` table per backend table, plus `auth_users` and `auth_sessions`) and seeds the Super Admin.
+
 ## Project layout
 
 ```

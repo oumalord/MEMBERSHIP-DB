@@ -1,15 +1,14 @@
 import { createServer, type IncomingMessage } from 'node:http';
 import { randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
+import { migrate, pool } from './pg';
 import { db, error, json, type HttpResult } from '@appdeploy/sdk';
 import { handler } from '../backend/index';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
 const scrypt = promisify(scryptCb) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
-const AUTH_FILE = resolve(process.cwd(), 'data', 'auth.json');
 const PORT = Number(process.env.API_PORT || 8787);
 const SESSION_MS = 7 * 24 * 3600 * 1000;
 const MIN_PASSWORD = 8;
@@ -17,14 +16,20 @@ const MIN_PASSWORD = 8;
 interface UserRow { id: string; email: string; name: string; salt: string; hash: string }
 interface AuthFile { users: UserRow[]; sessions: Record<string, { userId: string; exp: number }> }
 
-const authData: AuthFile = existsSync(AUTH_FILE) ? JSON.parse(readFileSync(AUTH_FILE, 'utf8')) : { users: [], sessions: {} };
+await migrate();
 
-function save() {
-  mkdirSync(dirname(AUTH_FILE), { recursive: true });
-  const tmp = AUTH_FILE + '.tmp';
-  writeFileSync(tmp, JSON.stringify(authData));
-  renameSync(tmp, AUTH_FILE);
-}
+// Users and sessions are cached in memory and written through to Postgres.
+const authData: AuthFile = { users: [], sessions: {} };
+for (const r of (await pool().query('SELECT id, email, name, salt, hash FROM auth_users')).rows) authData.users.push(r);
+for (const r of (await pool().query('SELECT token, user_id, expires_at FROM auth_sessions')).rows) authData.sessions[r.token] = { userId: r.user_id, exp: Number(r.expires_at) };
+
+const dbLog = (e: unknown) => console.error('Database write failed:', e);
+const upsertUser = (u: UserRow) => pool().query(
+  `INSERT INTO auth_users (id, email, name, salt, hash) VALUES ($1,$2,$3,$4,$5)
+   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, salt = EXCLUDED.salt, hash = EXCLUDED.hash`,
+  [u.id, u.email, u.name, u.salt, u.hash],
+);
+const dropSession = (token: string) => { pool().query('DELETE FROM auth_sessions WHERE token = $1', [token]).catch(dbLog); };
 
 const normEmail = (e: unknown) => String(e || '').trim().toLowerCase();
 const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -42,15 +47,16 @@ async function verifyPassword(user: UserRow | undefined, password: string) {
 
 async function createUser(email: string, password: string, name = '') {
   const user: UserRow = { id: randomUUID(), email, name: name || email, ...(await hashPassword(password)) };
+  await upsertUser(user);
   authData.users.push(user);
-  save();
   return user;
 }
 
-function issueToken(userId: string) {
+async function issueToken(userId: string) {
   const token = randomBytes(32).toString('hex');
-  authData.sessions[token] = { userId, exp: Date.now() + SESSION_MS };
-  save();
+  const exp = Date.now() + SESSION_MS;
+  await pool().query('INSERT INTO auth_sessions (token, user_id, expires_at) VALUES ($1,$2,$3)', [token, userId, exp]);
+  authData.sessions[token] = { userId, exp };
   return token;
 }
 
@@ -58,7 +64,7 @@ function sessionUser(req: IncomingMessage) {
   const m = /^Bearer (.+)$/.exec(String(req.headers.authorization || ''));
   const s = m && authData.sessions[m[1]];
   if (!s) return undefined;
-  if (s.exp < Date.now()) { delete authData.sessions[m![1]]; save(); return undefined; }
+  if (s.exp < Date.now()) { delete authData.sessions[m![1]]; dropSession(m![1]); return undefined; }
   const u = authData.users.find((x) => x.id === s.userId);
   return u ? { token: m![1], userId: u.id, email: u.email, name: u.name } : undefined;
 }
@@ -84,7 +90,7 @@ async function seedSuperAdmin() {
 
   let user = findUser(email);
   if (!user) user = await createUser(email, password, name);
-  else if (!(await verifyPassword(user, password))) { Object.assign(user, await hashPassword(password)); save(); }
+  else if (!(await verifyPassword(user, password))) { Object.assign(user, await hashPassword(password)); await upsertUser(user); }
 
   const { items } = await db.list<any>('admins', { filter: { email }, limit: 1 });
   const record = { userId: user.id, email, name: user.name, status: 'active', isSuperAdmin: true, canEdit: true, canManageAdmins: true };
@@ -112,7 +118,7 @@ async function authRoute(path: string, body: any, ip: string, req: IncomingMessa
     const user = findUser(email);
     if (!(await verifyPassword(user, String(body.password || '')))) { recordFailure(key); return error('Invalid email or password.', 401); }
     failures.delete(key);
-    return json({ token: issueToken(user!.id), user: { email: user!.email, name: user!.name } });
+    return json({ token: await issueToken(user!.id), user: { email: user!.email, name: user!.name } });
   }
 
   if (path === '/api/auth/register') {
@@ -125,12 +131,12 @@ async function authRoute(path: string, body: any, ip: string, req: IncomingMessa
     const { items } = await db.list<any>('admins', { filter: { email }, limit: 1 });
     if (items.length > 0) return error('This email belongs to an administrator. Sign in with the password your Super Admin gave you.', 403);
     const user = await createUser(email, password);
-    return json({ token: issueToken(user.id), user: { email: user.email, name: user.name } }, 201);
+    return json({ token: await issueToken(user.id), user: { email: user.email, name: user.name } }, 201);
   }
 
   if (path === '/api/auth/logout') {
     const u = sessionUser(req);
-    if (u) { delete authData.sessions[u.token]; save(); }
+    if (u) { delete authData.sessions[u.token]; dropSession(u.token); }
     return json({ ok: true });
   }
   return null;
