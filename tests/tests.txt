@@ -1,0 +1,66 @@
+# Tests
+
+## Test 1 - Individual signs up and profile persists after reload [sanity]
+Viewport: desktop
+Covers: individual sign-up, authentication, database create, persistence after reload
+Description: Verifies the individual sign-up flow creates a durable member profile.
+
+Steps:
+1. Sign in
+2. On the landing screen, under Sign Up, choose Individual
+3. Enter the full name "Jane Individual" and create the account
+4. Refresh the page
+
+Expected: The Member Portal sidebar still shows "Jane Individual" and the "My Membership" page after the refresh.
+
+## Test 2 - Institution signs up and adds a student to its roster
+Viewport: desktop
+Covers: institution sign-up, student creation, database persistence, roster display
+Description: Verifies an institution can register and manage its own student roster.
+
+Steps:
+1. Sign in
+2. On the landing screen, under Sign Up, choose Institution
+3. Enter the institution name "Nairobi Girls Institution" and create the account
+4. Click "+ Add Student" and add a student named "Student One"
+5. Refresh the page
+
+Expected: "Student One" appears in the Students roster list after the refresh.
+
+## Test 3 - First admin sign-in becomes Super Admin and can add a member with an invoice
+Viewport: desktop
+Covers: admin bootstrap as Super Admin, member creation, invoice issuance, edit-rights gating
+Description: Verifies the first person to use Admin sign-in becomes Super Admin with full editing rights and can manage members and billing.
+
+Steps:
+1. Sign in
+2. On the landing screen, under Sign In, choose Admin
+3. Navigate to Members and add a member named "Admin Added Member"
+4. Open "Admin Added Member" and issue an invoice for amount 300
+
+Expected: The sidebar shows the "Super Admin" badge, "Admin Added Member" appears in the Members list, and the issued KES 300 invoice appears on the member's statement.
+
+## Test 4 - Institution adds a custom category on mobile
+Viewport: mobile
+Covers: institution custom category creation, category persistence
+Description: Verifies an institution can define its own category alongside the default branches.
+
+Steps:
+1. Sign in
+2. On the landing screen, under Sign Up, choose Institution and create an account named "Mobile Test Institution"
+3. Switch to the Categories tab
+4. Add a custom category named "Special Troop"
+
+Expected: "Special Troop" appears under Your Custom Categories.
+
+## Test 5 - Reject an empty name on individual sign-up
+Viewport: mobile
+Covers: required-name validation, invalid-write guardrail on the individual sign-up form
+Description: Verifies invalid input is blocked without creating an account.
+
+Steps:
+1. Sign in
+2. On the landing screen, under Sign Up, choose Individual
+3. Leave the name field empty and click "Create Account"
+
+Expected: A validation message is shown and the sign-up form remains open without creating an account.
