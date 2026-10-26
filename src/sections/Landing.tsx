@@ -83,9 +83,13 @@ export default function Landing({ onResolved }: { onResolved: ResolvedHandler })
     try {
       const r = await api.post('/api/admin/session', {});
       onResolved('admin', r.data);
-    } catch {
-      await auth.signOut();
-      setErr('No admin account found for this login. Ask your Super Admin for an invitation.');
+    } catch (e: any) {
+      if (e.status === 403) {
+        await auth.signOut();
+        setErr(e.message || 'No admin account found for this login. Ask your Super Admin for an invitation.');
+      } else {
+        setErr(e.message || 'Could not verify admin access. Please try again.');
+      }
     } finally { setBusy(null); }
   };
 

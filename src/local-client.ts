@@ -21,7 +21,10 @@ async function request(path: string, options: RequestInit = {}) {
   const contentType = response.headers.get('content-type') || '';
   const data = contentType.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
-    throw new Error(typeof data === 'string' ? data : data?.message || `Request failed (${response.status})`);
+    throw Object.assign(
+      new Error(typeof data === 'string' ? data : data?.message || `Request failed (${response.status})`),
+      { status: response.status },
+    );
   }
   return { data };
 }
