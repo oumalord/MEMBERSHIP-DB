@@ -26,7 +26,11 @@ async function ensureSignupSession(email: string, password: string) {
     await auth.register(email.trim(), password);
   } catch (e: any) {
     if (!/already exists/i.test(e.message)) throw e;
-    await auth.signIn(email.trim(), password);
+    try {
+      await auth.signIn(email.trim(), password);
+    } catch {
+      throw new Error('This email already has an account. Sign in with its existing password or choose a different email.');
+    }
   }
 }
 
@@ -208,16 +212,12 @@ export default function Landing({ onResolved }: { onResolved: ResolvedHandler })
 
       {showIndividualForm && (
         <IndividualSignupModal
-          initialEmail={email}
-          initialPassword={password}
           onClose={() => setShowIndividualForm(false)}
           onSaved={(data) => { setShowIndividualForm(false); onResolved('individual', data); }}
         />
       )}
       {showInstitutionForm && (
         <InstitutionSignupModal
-          initialEmail={email}
-          initialPassword={password}
           onClose={() => setShowInstitutionForm(false)}
           onSaved={(data) => { setShowInstitutionForm(false); onResolved('institution', data); }}
         />
@@ -239,9 +239,9 @@ function ChipToggle({ label, options, selected, onToggle }: { label: string; opt
   );
 }
 
-function IndividualSignupModal({ initialEmail, initialPassword, onClose, onSaved }: { initialEmail: string; initialPassword: string; onClose: () => void; onSaved: (data: any) => void }) {
+function IndividualSignupModal({ onClose, onSaved }: { onClose: () => void; onSaved: (data: any) => void }) {
   const [form, setForm] = useState({
-    name: '', idNo: '', dob: '', maritalStatus: '', poBox: '', town: '', phone: '', email: '', loginEmail: initialEmail, loginPassword: initialPassword,
+    name: '', idNo: '', dob: '', maritalStatus: '', poBox: '', town: '', phone: '', email: '', loginEmail: '', loginPassword: '',
     occupation: '', employer: '', workPhone: '', workEmail: '', otherSkills: '',
     nextOfKinName: '', nextOfKinRelationship: '', nextOfKinPhone: '', nextOfKinEmail: '',
     yearJoinedGuiding: '', guidingAwards: '', leadershipHistory: '', currentSupport: '',
@@ -280,7 +280,7 @@ function IndividualSignupModal({ initialEmail, initialPassword, onClose, onSaved
 
         <div className="section-divider">Login Details</div>
         <div className="field-grid">
-          <div><label className="field-label">Login email *</label><input className="input" type="email" required autoComplete="email" value={form.loginEmail} onChange={(e) => set('loginEmail', e.target.value)} /></div>
+          <div><label className="field-label">Login email *</label><input className="input" type="email" required autoComplete="off" value={form.loginEmail} onChange={(e) => set('loginEmail', e.target.value)} /></div>
           <div><label className="field-label">Password *</label><input className="input" type="password" required minLength={8} autoComplete="new-password" value={form.loginPassword} onChange={(e) => set('loginPassword', e.target.value)} /></div>
         </div>
 
@@ -344,9 +344,9 @@ function IndividualSignupModal({ initialEmail, initialPassword, onClose, onSaved
   );
 }
 
-function InstitutionSignupModal({ initialEmail, initialPassword, onClose, onSaved }: { initialEmail: string; initialPassword: string; onClose: () => void; onSaved: (data: any) => void }) {
+function InstitutionSignupModal({ onClose, onSaved }: { onClose: () => void; onSaved: (data: any) => void }) {
   const [form, setForm] = useState({
-    name: '', address: '', phone: '', email: '', loginEmail: initialEmail, loginPassword: initialPassword, county: '', subCounty: '',
+    name: '', address: '', phone: '', email: '', loginEmail: '', loginPassword: '', county: '', subCounty: '',
     principalName: '', principalMobile: '', principalEmail: '',
     noOfUnits: '', noOfGuidesInUnit: '', guideLeaderName: '', guideLeaderPhone: '', guideLeaderEmail: '', meetingDayTime: '',
   });
@@ -373,7 +373,7 @@ function InstitutionSignupModal({ initialEmail, initialPassword, onClose, onSave
 
         <div className="section-divider">Login Details</div>
         <div className="field-grid">
-          <div><label className="field-label">Login email *</label><input className="input" type="email" required autoComplete="email" value={form.loginEmail} onChange={(e) => set('loginEmail', e.target.value)} /></div>
+          <div><label className="field-label">Login email *</label><input className="input" type="email" required autoComplete="off" value={form.loginEmail} onChange={(e) => set('loginEmail', e.target.value)} /></div>
           <div><label className="field-label">Password *</label><input className="input" type="password" required minLength={8} autoComplete="new-password" value={form.loginPassword} onChange={(e) => set('loginPassword', e.target.value)} /></div>
         </div>
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { api } from '../local-client';
 import type { AdminAccount } from '../types';
+import { downloadCsv } from '../csv';
 
 export default function AdminAccounts({ isSuperAdmin }: { isSuperAdmin: boolean }) {
   const [accounts, setAccounts] = useState<AdminAccount[]>([]);
@@ -15,6 +17,15 @@ export default function AdminAccounts({ isSuperAdmin }: { isSuperAdmin: boolean 
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  const exportAccounts = () => downloadCsv('kgga-admin-accounts.csv', [
+    { label: 'Name', value: (account: AdminAccount) => account.name },
+    { label: 'Email', value: (account: AdminAccount) => account.email },
+    { label: 'Role', value: (account: AdminAccount) => account.isSuperAdmin ? 'Super Admin' : 'Admin' },
+    { label: 'Editing', value: (account: AdminAccount) => account.canEdit ? 'Yes' : 'No' },
+    { label: 'Can Manage Admins', value: (account: AdminAccount) => account.canManageAdmins ? 'Yes' : 'No' },
+    { label: 'Status', value: (account: AdminAccount) => account.status },
+  ], accounts);
 
   const toggleEdit = async (a: AdminAccount) => {
     await api.put(`/api/admin/accounts/${a.id}/rights`, { canEdit: !a.canEdit });
@@ -54,7 +65,10 @@ export default function AdminAccounts({ isSuperAdmin }: { isSuperAdmin: boolean 
           <div className="page-title">Admin Accounts</div>
           <div className="page-sub">Manage administrators and their editing rights</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowInvite(true)}>+ Create Admin</button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={exportAccounts} disabled={loading || accounts.length === 0}><Download size={15} /> Download CSV</button>
+          <button className="btn btn-primary" onClick={() => setShowInvite(true)}>+ Create Admin</button>
+        </div>
       </div>
 
       <div className="card" style={{ padding: 0 }}>

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { api } from '../local-client';
 import type { EventItem, Member, Participation } from '../types';
+import { downloadCsv } from '../csv';
 
 export default function Events({ canEdit }: { canEdit: boolean }) {
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -18,6 +20,13 @@ export default function Events({ canEdit }: { canEdit: boolean }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  const exportEvents = () => downloadCsv('kgga-events.csv', [
+    { label: 'Title', value: (event: EventItem) => event.title },
+    { label: 'Date', value: (event: EventItem) => event.date },
+    { label: 'Location', value: (event: EventItem) => event.location },
+    { label: 'Description', value: (event: EventItem) => event.description },
+  ], events);
 
   const toggle = async (id: string) => {
     if (expanded === id) { setExpanded(null); return; }
@@ -43,7 +52,10 @@ export default function Events({ canEdit }: { canEdit: boolean }) {
           <div className="page-title">Events</div>
           <div className="page-sub">Schedule activities and track participation</div>
         </div>
-        {canEdit && <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Schedule Event</button>}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={exportEvents} disabled={loading || events.length === 0}><Download size={15} /> Download CSV</button>
+          {canEdit && <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Schedule Event</button>}
+        </div>
       </div>
 
       {loading ? <div className="empty-state">Loading…</div> : events.length === 0 ? <div className="empty-state">No events scheduled yet.</div> : (

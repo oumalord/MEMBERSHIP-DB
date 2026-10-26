@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { api } from '../local-client';
 import type { Member, Transaction } from '../types';
 import { MEMBERSHIP_CATEGORY_NAMES, membershipCategoryForAge } from '../../membership-categories';
+import { downloadCsv } from '../csv';
 
 const BRANCHES = [...MEMBERSHIP_CATEGORY_NAMES, 'Unassigned'];
 const STATUSES = ['active', 'pending', 'suspended', 'expelled'];
@@ -64,6 +66,15 @@ export default function Members({ canEdit }: { canEdit: boolean }) {
   };
 
   const sourceLabel = (m: Member) => (m.source === 'institution' ? m.institutionName || 'Institution' : m.source === 'self' ? 'Individual (self)' : 'Admin');
+  const exportMembers = () => downloadCsv('kgga-members.csv', [
+    { label: 'Name', value: (m: Member) => m.name },
+    { label: 'Email', value: (m: Member) => m.email },
+    { label: 'Phone', value: (m: Member) => m.phone },
+    { label: 'Category', value: (m: Member) => m.branch },
+    { label: 'Added Via', value: sourceLabel },
+    { label: 'Status', value: (m: Member) => m.status },
+    { label: 'Subscription Expiry', value: (m: Member) => m.subscriptionExpiry },
+  ], filtered);
 
   return (
     <div>
@@ -73,6 +84,7 @@ export default function Members({ canEdit }: { canEdit: boolean }) {
           <div className="page-sub">{members.length} registered members</div>
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={exportMembers} disabled={loading || filtered.length === 0}><Download size={15} /> Download CSV</button>
           {canEdit && <button className="btn btn-secondary" onClick={runTransitionCheck} disabled={busy}>Run Branch Transition</button>}
           {canEdit && <button className="btn btn-secondary" onClick={runComplianceCheck} disabled={busy}>Run Compliance Check</button>}
           {canEdit && <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Member</button>}

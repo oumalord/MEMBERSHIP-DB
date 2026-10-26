@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { api } from '../local-client';
 import type { Communication } from '../types';
 import { MEMBERSHIP_CATEGORY_NAMES } from '../../membership-categories';
+import { downloadCsv } from '../csv';
 
 const BRANCHES = MEMBERSHIP_CATEGORY_NAMES;
 
@@ -21,6 +23,13 @@ export default function Messages({ canEdit }: { canEdit: boolean }) {
   };
   useEffect(() => { load(); }, []);
 
+  const exportMessages = () => downloadCsv('kgga-message-history.csv', [
+    { label: 'Subject', value: (message: Communication) => message.subject || '(Renewal Reminder)' },
+    { label: 'Audience', value: (message: Communication) => message.audience },
+    { label: 'Recipients', value: (message: Communication) => message.recipientCount },
+    { label: 'Date', value: (message: Communication) => message.date },
+  ], items);
+
   const send = async () => {
     if (!subject.trim() || !body.trim()) return;
     setSending(true);
@@ -39,6 +48,7 @@ export default function Messages({ canEdit }: { canEdit: boolean }) {
           <div className="page-title">Bulk Messages</div>
           <div className="page-sub">Send updates and reminders to your members</div>
         </div>
+        <button className="btn btn-secondary" onClick={exportMessages} disabled={loading || items.length === 0}><Download size={15} /> Download History</button>
       </div>
 
       {canEdit ? (
