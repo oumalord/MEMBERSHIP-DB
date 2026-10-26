@@ -911,7 +911,7 @@ async function handle(req, res) {
       const password = String(body.password || "");
       const exists = email ? await findUser(email) : void 0;
       if (email && !exists && password.length < MIN_PASSWORD) return send(error(`Set a temporary password of at least ${MIN_PASSWORD} characters for the new admin.`, 400));
-      const result = await handler(method, url.pathname, { user: me, body, query });
+      const result = await handler(method, path, { user: me, body, query });
       if (result.status < 300 && email && !exists) await createUser(email, password);
       return send(result);
     }
