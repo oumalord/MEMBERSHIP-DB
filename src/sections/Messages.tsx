@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../local-client';
 import type { Communication } from '../types';
+import { MEMBERSHIP_CATEGORY_NAMES } from '../../membership-categories';
 
-const BRANCHES = ['Rainbow', 'Brownie', 'Girl Guide', 'Ranger Guide', 'Adult Leader'];
+const BRANCHES = MEMBERSHIP_CATEGORY_NAMES;
 
 export default function Messages({ canEdit }: { canEdit: boolean }) {
   const [items, setItems] = useState<Communication[]>([]);

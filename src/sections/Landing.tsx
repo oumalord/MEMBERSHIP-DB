@@ -2,16 +2,32 @@ import { useState } from 'react';
 import { Users, Receipt, CalendarDays, User, Building2, ShieldCheck } from 'lucide-react';
 import { Logo, useBranding } from '../branding';
 import { auth, api } from '../local-client';
+import { MEMBERSHIP_CATEGORY_NAMES, membershipCategoryForAge } from '../../membership-categories';
 
 type ResolvedHandler = (portal: 'admin' | 'institution' | 'individual', data: any) => void;
 
-const LEVELS = ['Rainbow', 'Brownie', 'Guide', 'Ranger', 'Young Leader'];
-const TRAININGS = ['Introductory', 'Pre-warrant', 'Advanced', 'Specialized'];
+const TRAININGS = [
+  'Introductory to Guiding',
+  'Pre-warrant training',
+  'Patrol leaders training',
+  'Specialized training',
+  'Camp craft',
+  'Diploma level training',
+];
 const INVOLVEMENTS = ['Guide leader', 'Trainer', 'Commissioner', 'Other'];
 const ENGAGEMENT_LEVELS = ['Unit', 'County', 'National', 'International', 'Other'];
 
 function toggle(list: string[], value: string): string[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
+
+async function ensureSignupSession(email: string, password: string) {
+  try {
+    await auth.register(email.trim(), password);
+  } catch (e: any) {
+    if (!/already exists/i.test(e.message)) throw e;
+    await auth.signIn(email.trim(), password);
+  }
 }
 
 function unitForBirthDate(dob: string) {
@@ -22,12 +38,8 @@ function unitForBirthDate(dob: string) {
   let age = now.getFullYear() - birth.getFullYear();
   if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
   if (age < 0 || age > 120) return 'Invalid date of birth';
-  if (age < 5) return 'Not eligible for a unit';
-  if (age <= 6) return 'Rainbow';
-  if (age <= 9) return 'Brownie';
-  if (age <= 14) return 'Girl Guide';
-  if (age <= 17) return 'Ranger Guide';
-  return 'Adult Leader';
+  if (age < 3) return 'Not eligible for a unit';
+  return membershipCategoryForAge(age);
 }
 
 export default function Landing({ onResolved }: { onResolved: ResolvedHandler }) {
@@ -93,22 +105,6 @@ export default function Landing({ onResolved }: { onResolved: ResolvedHandler })
     } finally { setBusy(null); }
   };
 
-  // Registers the login; if the email already has one, falls back to signing in with the same password.
-  const registerOrSignIn = async (): Promise<boolean> => {
-    const c = credentials(); if (!c) return false;
-    setErr('');
-    try {
-      await auth.register(c.e, c.p);
-      return true;
-    } catch (e: any) {
-      if (!/already exists/i.test(e.message)) { setErr(e.message); return false; }
-    }
-    try { await auth.signIn(c.e, c.p); return true; } catch { setErr('An account with this email already exists. Use its password, or sign in.'); return false; }
-  };
-
-  const startSignUpIndividual = async () => { if (await registerOrSignIn()) setShowIndividualForm(true); };
-  const startSignUpInstitution = async () => { if (await registerOrSignIn()) setShowInstitutionForm(true); };
-
   const signInSelectedPortal = async () => {
     if (activePortal === 'individual') {
       await signInIndividual();
@@ -118,11 +114,9 @@ export default function Landing({ onResolved }: { onResolved: ResolvedHandler })
   };
 
   const createAccountForSelectedPortal = async () => {
-    if (activePortal === 'individual') {
-      await startSignUpIndividual();
-      return;
-    }
-    await startSignUpInstitution();
+    setErr('');
+    if (activePortal === 'individual') setShowIndividualForm(true);
+    else setShowInstitutionForm(true);
   };
 
   return (
@@ -214,12 +208,16 @@ export default function Landing({ onResolved }: { onResolved: ResolvedHandler })
 
       {showIndividualForm && (
         <IndividualSignupModal
+          initialEmail={email}
+          initialPassword={password}
           onClose={() => setShowIndividualForm(false)}
           onSaved={(data) => { setShowIndividualForm(false); onResolved('individual', data); }}
         />
       )}
       {showInstitutionForm && (
         <InstitutionSignupModal
+          initialEmail={email}
+          initialPassword={password}
           onClose={() => setShowInstitutionForm(false)}
           onSaved={(data) => { setShowInstitutionForm(false); onResolved('institution', data); }}
         />
@@ -241,9 +239,9 @@ function ChipToggle({ label, options, selected, onToggle }: { label: string; opt
   );
 }
 
-function IndividualSignupModal({ onClose, onSaved }: { onClose: () => void; onSaved: (data: any) => void }) {
+function IndividualSignupModal({ initialEmail, initialPassword, onClose, onSaved }: { initialEmail: string; initialPassword: string; onClose: () => void; onSaved: (data: any) => void }) {
   const [form, setForm] = useState({
-    name: '', idNo: '', dob: '', maritalStatus: '', poBox: '', town: '', phone: '', email: '',
+    name: '', idNo: '', dob: '', maritalStatus: '', poBox: '', town: '', phone: '', email: '', loginEmail: initialEmail, loginPassword: initialPassword,
     occupation: '', employer: '', workPhone: '', workEmail: '', otherSkills: '',
     nextOfKinName: '', nextOfKinRelationship: '', nextOfKinPhone: '', nextOfKinEmail: '',
     yearJoinedGuiding: '', guidingAwards: '', leadershipHistory: '', currentSupport: '',
@@ -259,23 +257,32 @@ function IndividualSignupModal({ onClose, onSaved }: { onClose: () => void; onSa
   const submit = async () => {
     if (!form.name.trim()) { setErr('Full name is required.'); return; }
     if (!form.dob) { setErr('Date of birth is required to assign a guide unit.'); return; }
+    if (!form.loginEmail.trim() || form.loginPassword.length < 8) { setErr('Enter a login email and a password of at least 8 characters.'); return; }
     setSaving(true); setErr('');
     try {
+      await ensureSignupSession(form.loginEmail, form.loginPassword);
+      const { loginEmail: _loginEmail, loginPassword: _loginPassword, ...profile } = form;
       const r = await api.post('/api/account/signup-individual', {
-        ...form,
+        ...profile,
         levelsUndertaken: levelsUndertaken.join(', '),
         trainingsReceived: trainingsReceived.join(', '),
         currentInvolvement: currentInvolvement.join(', '),
         currentLevelOfEngagement: currentLevelOfEngagement.join(', '),
       });
       onSaved(r.data);
-    } catch { setErr('Could not complete sign up. Please try again.'); } finally { setSaving(false); }
+    } catch (e: any) { setErr(e.message || 'Could not complete sign up. Please try again.'); } finally { setSaving(false); }
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" style={{ maxWidth: 620 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-title">Adult Member Registration</div>
+
+        <div className="section-divider">Login Details</div>
+        <div className="field-grid">
+          <div><label className="field-label">Login email *</label><input className="input" type="email" required autoComplete="email" value={form.loginEmail} onChange={(e) => set('loginEmail', e.target.value)} /></div>
+          <div><label className="field-label">Password *</label><input className="input" type="password" required minLength={8} autoComplete="new-password" value={form.loginPassword} onChange={(e) => set('loginPassword', e.target.value)} /></div>
+        </div>
 
         <div className="section-divider">Personal Information</div>
         <div className="field"><label className="field-label">Full Name *</label><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>
@@ -317,7 +324,7 @@ function IndividualSignupModal({ onClose, onSaved }: { onClose: () => void; onSa
 
         <div className="section-divider">Guiding Information</div>
         <div className="field"><label className="field-label">Year of Joining Guiding</label><input className="input" value={form.yearJoinedGuiding} onChange={(e) => set('yearJoinedGuiding', e.target.value)} /></div>
-        <ChipToggle label="Levels of Guiding Undertaken" options={LEVELS} selected={levelsUndertaken} onToggle={(v) => setLevelsUndertaken((l) => toggle(l, v))} />
+        <ChipToggle label="Levels of Guiding Undertaken" options={MEMBERSHIP_CATEGORY_NAMES} selected={levelsUndertaken} onToggle={(v) => setLevelsUndertaken((l) => toggle(l, v))} />
         <ChipToggle label="Type of Guiding Trainings Received" options={TRAININGS} selected={trainingsReceived} onToggle={(v) => setTrainingsReceived((l) => toggle(l, v))} />
         <div className="field"><label className="field-label">Guiding Awards Received</label><input className="input" value={form.guidingAwards} onChange={(e) => set('guidingAwards', e.target.value)} /></div>
         <div className="field"><label className="field-label">Past Leadership Positions, Achievements or Recognition</label><textarea className="input" rows={2} value={form.leadershipHistory} onChange={(e) => set('leadershipHistory', e.target.value)} /></div>
@@ -337,9 +344,9 @@ function IndividualSignupModal({ onClose, onSaved }: { onClose: () => void; onSa
   );
 }
 
-function InstitutionSignupModal({ onClose, onSaved }: { onClose: () => void; onSaved: (data: any) => void }) {
+function InstitutionSignupModal({ initialEmail, initialPassword, onClose, onSaved }: { initialEmail: string; initialPassword: string; onClose: () => void; onSaved: (data: any) => void }) {
   const [form, setForm] = useState({
-    name: '', address: '', phone: '', email: '', county: '', subCounty: '',
+    name: '', address: '', phone: '', email: '', loginEmail: initialEmail, loginPassword: initialPassword, county: '', subCounty: '',
     principalName: '', principalMobile: '', principalEmail: '',
     noOfUnits: '', noOfGuidesInUnit: '', guideLeaderName: '', guideLeaderPhone: '', guideLeaderEmail: '', meetingDayTime: '',
   });
@@ -349,17 +356,26 @@ function InstitutionSignupModal({ onClose, onSaved }: { onClose: () => void; onS
 
   const submit = async () => {
     if (!form.name.trim()) { setErr('Institution name is required.'); return; }
+    if (!form.loginEmail.trim() || form.loginPassword.length < 8) { setErr('Enter a login email and a password of at least 8 characters.'); return; }
     setSaving(true); setErr('');
     try {
-      const r = await api.post('/api/account/signup-institution', form);
+      await ensureSignupSession(form.loginEmail, form.loginPassword);
+      const { loginEmail: _loginEmail, loginPassword: _loginPassword, ...institution } = form;
+      const r = await api.post('/api/account/signup-institution', institution);
       onSaved(r.data);
-    } catch { setErr('Could not complete sign up. Please try again.'); } finally { setSaving(false); }
+    } catch (e: any) { setErr(e.message || 'Could not complete sign up. Please try again.'); } finally { setSaving(false); }
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-box" style={{ maxWidth: 580 }} onClick={(e) => e.stopPropagation()}>
         <div className="modal-title">Unit Registration</div>
+
+        <div className="section-divider">Login Details</div>
+        <div className="field-grid">
+          <div><label className="field-label">Login email *</label><input className="input" type="email" required autoComplete="email" value={form.loginEmail} onChange={(e) => set('loginEmail', e.target.value)} /></div>
+          <div><label className="field-label">Password *</label><input className="input" type="password" required minLength={8} autoComplete="new-password" value={form.loginPassword} onChange={(e) => set('loginPassword', e.target.value)} /></div>
+        </div>
 
         <div className="section-divider">Institution</div>
         <div className="field"><label className="field-label">Name of Institution *</label><input className="input" value={form.name} onChange={(e) => set('name', e.target.value)} /></div>

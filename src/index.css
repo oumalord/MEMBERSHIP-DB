@@ -249,6 +249,7 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
 .icon-btn:hover { background: rgba(255,255,255,0.1); }
 
 .brand-badge.has-logo { background: #fff; padding: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.brand-badge.is-empty { background: transparent; box-shadow: none; }
 .brand-badge img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .notice { padding: 11px 14px; border-radius: 10px; font-size: 13.5px; margin-bottom: 18px; font-weight: 500; }
@@ -260,6 +261,7 @@ table.data-table tbody tr:last-child td { border-bottom: none; }
 .logo-uploader { display: flex; gap: 18px; align-items: center; }
 .logo-preview { width: 96px; height: 96px; border-radius: 18px; border: 2px dashed #cfd1e6; background: var(--navy-50); display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; font-size: 26px; font-weight: 800; color: var(--navy-600); }
 .logo-preview img { width: 100%; height: 100%; object-fit: contain; padding: 8px; }
+.logo-preview.is-empty { background: transparent; border-color: transparent; }
 .preview-sidebar { background: linear-gradient(180deg, var(--navy-700), var(--navy-900)); border-radius: 12px; padding: 16px; color: #fff; }
 
 /* ---------- Responsive ---------- */

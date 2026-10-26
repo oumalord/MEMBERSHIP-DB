@@ -79,8 +79,8 @@ export default function Settings() {
         <div className="card">
           <div className="section-title">Logo</div>
           <div className="logo-uploader">
-            <div className="logo-preview">
-              {logo ? <img src={logo} alt="Logo preview" /> : <span>{orgName.slice(0, 2).toUpperCase() || 'KG'}</span>}
+            <div className={`logo-preview ${logo ? 'has-logo' : 'is-empty'}`}>
+              {logo && <img src={logo} alt="Logo preview" />}
             </div>
             <div style={{ minWidth: 0 }}>
               <p style={{ fontSize: 13, color: 'var(--muted)', margin: '0 0 12px' }}>PNG, JPEG, WebP or SVG. A square image on a transparent background works best.</p>
@@ -103,7 +103,7 @@ export default function Settings() {
           <div className="section-title">Preview</div>
           <div className="preview-sidebar">
             <div className="brand" style={{ border: 'none', margin: 0, padding: 0 }}>
-              <div className={`brand-badge ${logo ? 'has-logo' : ''}`}>{logo ? <img src={logo} alt="" /> : orgName.slice(0, 2).toUpperCase()}</div>
+              <div className={`brand-badge ${logo ? 'has-logo' : 'is-empty'}`}>{logo && <img src={logo} alt="" />}</div>
               <div><div className="brand-title">{orgName || 'KGGA'}</div><div className="brand-sub">Admin Portal</div></div>
             </div>
           </div>

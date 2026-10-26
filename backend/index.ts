@@ -1,22 +1,10 @@
 import { router, json, error, db, requireAuth } from '@appdeploy/sdk';
+import { membershipCategoryForAge } from '../membership-categories';
 
 type Middleware = (ctx: any) => Promise<any>;
 
 interface Branding { orgName: string; tagline: string; logo: string }
 const DEFAULT_BRANDING: Branding = { orgName: 'KGGA', tagline: 'Girls creating a better world', logo: '' };
-
-const BRANCHES = [
-  { name: 'Rainbow', min: 5, max: 6 },
-  { name: 'Brownie', min: 7, max: 9 },
-  { name: 'Girl Guide', min: 10, max: 14 },
-  { name: 'Ranger Guide', min: 15, max: 17 },
-  { name: 'Adult Leader', min: 18, max: 120 },
-];
-
-function branchForAge(age: number): string {
-  const b = BRANCHES.find((b) => age >= b.min && age <= b.max);
-  return b ? b.name : 'Unassigned';
-}
 
 function ageFromDob(dob?: string): number | null {
   if (!dob) return null;
@@ -32,13 +20,14 @@ function ageFromDob(dob?: string): number | null {
 // The guide unit is always derived from the date of birth, never typed in.
 function unitForDob(dob?: string): string {
   const age = ageFromDob(dob);
-  return age === null ? 'Unassigned' : branchForAge(age);
+  return age === null ? 'Unassigned' : membershipCategoryForAge(age);
 }
 
 function validDob(dob?: string): string | null {
   const age = ageFromDob(dob);
   if (age === null) return 'A valid date of birth is required to place the member in a guide unit.';
   if (age < 0 || age > 120) return 'Date of birth is not valid.';
+  if (age < 3) return 'Members must be at least 3 years old to join a category.';
   return null;
 }
 
@@ -242,7 +231,7 @@ export const handler = router({
     const age = ageFromDob(body.dob);
     const record: Member = {
       name: body.name.trim(), phone: body.phone || '', email: body.email || '', dob: body.dob || '',
-      branch: branchForAge(age!),
+      branch: membershipCategoryForAge(age!),
       region: body.region || '', guardianName: body.guardianName || '', status: 'active', joinedDate: today(), subscriptionExpiry: plusDays(365),
       institutionId: ctx.institution.id, institutionName: ctx.institution.name, source: 'institution', memberType: age! >= 18 ? 'adult' : 'youth',
       membershipNo: body.membershipNo || '', interests: body.interests || '', guardianPhone: body.guardianPhone || '',
@@ -391,7 +380,7 @@ export const handler = router({
     const age = ageFromDob(body.dob);
     const record: Member = {
       name: body.name.trim(), phone: body.phone || '', email: body.email || '', dob: body.dob || '',
-      branch: branchForAge(age!), region: body.region || '', guardianName: body.guardianName || '',
+      branch: membershipCategoryForAge(age!), region: body.region || '', guardianName: body.guardianName || '',
       status: 'active', joinedDate: today(), subscriptionExpiry: plusDays(365), source: 'admin',
       memberType: age! >= 18 ? 'adult' : 'youth',
       ...(loginUserId ? { ownerUserId: loginUserId } : {}),
@@ -450,7 +439,7 @@ export const handler = router({
       if (m.institutionId) continue;
       const age = ageFromDob(m.dob);
       if (age === null) continue;
-      const newBranch = branchForAge(age);
+      const newBranch = membershipCategoryForAge(age);
       if (newBranch !== m.branch) {
         await db.update('members', [{ id: m.id, record: { ...m, branch: newBranch } }]);
         updated++;

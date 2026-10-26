@@ -119,7 +119,7 @@ export default function App() {
     return (
       <div className="login-shell">
         <div className="login-card">
-          <div className="login-logo">KG</div>
+          <Logo className="brand-badge login-logo" />
           <p style={{ color: 'var(--muted)' }}>Loadingâ€¦</p>
         </div>
       </div>

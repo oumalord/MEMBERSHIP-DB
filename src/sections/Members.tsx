@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../local-client';
 import type { Member, Transaction } from '../types';
+import { MEMBERSHIP_CATEGORY_NAMES, membershipCategoryForAge } from '../../membership-categories';
 
-const BRANCHES = ['Rainbow', 'Brownie', 'Girl Guide', 'Ranger Guide', 'Adult Leader', 'Unassigned'];
+const BRANCHES = [...MEMBERSHIP_CATEGORY_NAMES, 'Unassigned'];
 const STATUSES = ['active', 'pending', 'suspended', 'expelled'];
 
 function guideUnitForDob(dob: string) {
@@ -13,11 +14,8 @@ function guideUnitForDob(dob: string) {
   let age = now.getFullYear() - birth.getFullYear();
   if (now.getMonth() < birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() < birth.getDate())) age--;
   if (age < 0 || age > 120) return 'Invalid date of birth';
-  if (age <= 6) return age >= 5 ? 'Rainbow' : 'Not eligible for a unit';
-  if (age <= 9) return 'Brownie';
-  if (age <= 14) return 'Girl Guide';
-  if (age <= 17) return 'Ranger Guide';
-  return 'Adult Leader';
+  if (age < 3) return 'Not eligible for a unit';
+  return membershipCategoryForAge(age);
 }
 
 export default function Members({ canEdit }: { canEdit: boolean }) {

@@ -4,6 +4,16 @@ import { api } from './local-client';
 export interface Branding { orgName: string; tagline: string; logo: string }
 
 const DEFAULT_BRANDING: Branding = { orgName: 'KGGA', tagline: 'Girls creating a better world', logo: '' };
+const BRANDING_CACHE_KEY = 'kgga-branding-cache';
+
+function readCachedBranding(): Branding {
+  try {
+    const cached = localStorage.getItem(BRANDING_CACHE_KEY);
+    return cached ? { ...DEFAULT_BRANDING, ...JSON.parse(cached) } : DEFAULT_BRANDING;
+  } catch {
+    return DEFAULT_BRANDING;
+  }
+}
 
 const Ctx = createContext<{ branding: Branding; setBranding: (b: Branding) => void; reload: () => void }>({
   branding: DEFAULT_BRANDING,
@@ -12,13 +22,18 @@ const Ctx = createContext<{ branding: Branding; setBranding: (b: Branding) => vo
 });
 
 export function BrandingProvider({ children }: { children: ReactNode }) {
-  const [branding, setBranding] = useState<Branding>(DEFAULT_BRANDING);
+  const [branding, setBrandingState] = useState<Branding>(readCachedBranding);
+
+  const setBranding = useCallback((next: Branding) => {
+    setBrandingState(next);
+    try { localStorage.setItem(BRANDING_CACHE_KEY, JSON.stringify(next)); } catch { /* Cache is optional. */ }
+  }, []);
 
   const reload = useCallback(() => {
     api.get('/api/branding').then((r) => {
       if (r.data && typeof r.data === 'object') setBranding({ ...DEFAULT_BRANDING, ...r.data });
     }).catch(() => {});
-  }, []);
+  }, [setBranding]);
 
   useEffect(() => { reload(); }, [reload]);
 
@@ -31,8 +46,6 @@ export const useBranding = () => useContext(Ctx);
 
 export function Logo({ className = 'brand-badge' }: { className?: string }) {
   const { branding } = useBranding();
-  if (branding.logo) {
-    return <div className={`${className} has-logo`}><img src={branding.logo} alt={`${branding.orgName} logo`} /></div>;
-  }
-  return <div className={className}>{branding.orgName.slice(0, 2).toUpperCase()}</div>;
+  if (!branding.logo) return <div className={`${className} is-empty`} aria-hidden="true" />;
+  return <div className={`${className} has-logo`}><img src={branding.logo} alt={`${branding.orgName} logo`} /></div>;
 }

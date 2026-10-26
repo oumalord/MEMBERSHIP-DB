@@ -1,14 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../local-client';
+import { membershipCategoryForAge } from '../../membership-categories';
 
 type AccountType = 'individual' | 'institution';
-const BRANCHES = [
-  { name: 'Rainbow', min: 5, max: 6 },
-  { name: 'Brownie', min: 7, max: 9 },
-  { name: 'Girl Guide', min: 10, max: 14 },
-  { name: 'Ranger Guide', min: 15, max: 17 },
-  { name: 'Adult Leader', min: 18, max: 120 },
-];
 
 function getAge(dob: string) {
   if (!dob) return null;
@@ -31,7 +25,7 @@ export default function AccountRegistration() {
   const [success, setSuccess] = useState('');
   const set = (key: string, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const age = type === 'individual' ? getAge(form.dob) : null;
-  const branch = age === null ? '' : BRANCHES.find((b) => age >= b.min && age <= b.max)?.name || 'Not eligible for a unit';
+  const branch = age === null ? '' : age < 3 ? 'Not eligible for a category' : membershipCategoryForAge(age);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();

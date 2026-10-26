@@ -123,19 +123,23 @@ var db = {
   }
 };
 
+// membership-categories.ts
+var MEMBERSHIP_CATEGORIES = [
+  { name: "Rainbows", min: 3, max: 6 },
+  { name: "Brownies", min: 7, max: 9 },
+  { name: "Girl Guides", min: 10, max: 14 },
+  { name: "Ranger", min: 15, max: 17 },
+  { name: "Young Leader", min: 18, max: 35 },
+  { name: "Bravo", min: 36, max: 60 },
+  { name: "Trefoil", min: 61, max: 120 }
+];
+var MEMBERSHIP_CATEGORY_NAMES = MEMBERSHIP_CATEGORIES.map(({ name }) => name);
+function membershipCategoryForAge(age) {
+  return MEMBERSHIP_CATEGORIES.find(({ min, max }) => age >= min && age <= max)?.name || "Unassigned";
+}
+
 // backend/index.ts
 var DEFAULT_BRANDING = { orgName: "KGGA", tagline: "Girls creating a better world", logo: "" };
-var BRANCHES = [
-  { name: "Rainbow", min: 5, max: 6 },
-  { name: "Brownie", min: 7, max: 9 },
-  { name: "Girl Guide", min: 10, max: 14 },
-  { name: "Ranger Guide", min: 15, max: 17 },
-  { name: "Adult Leader", min: 18, max: 120 }
-];
-function branchForAge(age) {
-  const b = BRANCHES.find((b2) => age >= b2.min && age <= b2.max);
-  return b ? b.name : "Unassigned";
-}
 function ageFromDob(dob) {
   if (!dob) return null;
   const birth = new Date(dob);
@@ -148,12 +152,13 @@ function ageFromDob(dob) {
 }
 function unitForDob(dob) {
   const age = ageFromDob(dob);
-  return age === null ? "Unassigned" : branchForAge(age);
+  return age === null ? "Unassigned" : membershipCategoryForAge(age);
 }
 function validDob(dob) {
   const age = ageFromDob(dob);
   if (age === null) return "A valid date of birth is required to place the member in a guide unit.";
   if (age < 0 || age > 120) return "Date of birth is not valid.";
+  if (age < 3) return "Members must be at least 3 years old to join a category.";
   return null;
 }
 function today() {
@@ -360,7 +365,7 @@ var handler = router({
       phone: body.phone || "",
       email: body.email || "",
       dob: body.dob || "",
-      branch: branchForAge(age),
+      branch: membershipCategoryForAge(age),
       region: body.region || "",
       guardianName: body.guardianName || "",
       status: "active",
@@ -509,7 +514,7 @@ var handler = router({
       phone: body.phone || "",
       email: body.email || "",
       dob: body.dob || "",
-      branch: branchForAge(age),
+      branch: membershipCategoryForAge(age),
       region: body.region || "",
       guardianName: body.guardianName || "",
       status: "active",
@@ -584,7 +589,7 @@ var handler = router({
       if (m.institutionId) continue;
       const age = ageFromDob(m.dob);
       if (age === null) continue;
-      const newBranch = branchForAge(age);
+      const newBranch = membershipCategoryForAge(age);
       if (newBranch !== m.branch) {
         await db.update("members", [{ id: m.id, record: { ...m, branch: newBranch } }]);
         updated++;

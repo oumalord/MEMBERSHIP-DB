@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
 import { api } from '../local-client';
 import type { Member, Category } from '../types';
+import { MEMBERSHIP_CATEGORIES, MEMBERSHIP_CATEGORY_NAMES } from '../../membership-categories';
 
-const DEFAULT_BRANCHES = ['Rainbow', 'Brownie', 'Girl Guide', 'Ranger Guide', 'Adult Leader'];
-const UNIT_AGES = [
-  { name: 'Rainbow', min: 5, max: 6 },
-  { name: 'Brownie', min: 7, max: 9 },
-  { name: 'Girl Guide', min: 10, max: 14 },
-  { name: 'Ranger Guide', min: 15, max: 17 },
-  { name: 'Adult Leader', min: 18, max: 120 },
-];
+const DEFAULT_BRANCHES = MEMBERSHIP_CATEGORY_NAMES;
+const UNIT_AGES = MEMBERSHIP_CATEGORIES;
 
 export default function InstitutionDashboard() {
   const [tab, setTab] = useState<'members' | 'categories'>('members');
