@@ -879,13 +879,15 @@ async function handle(req, res) {
     await init();
     const url = new URL(req.url || "/", "http://localhost");
     const method = req.method || "GET";
+    const requestedPath = url.searchParams.get("__path");
+    const path = requestedPath ? `/api/${requestedPath}` : url.pathname;
     const body = ["POST", "PUT", "PATCH"].includes(method) ? await readBody(req) : {};
     const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
     const query = Object.fromEntries(url.searchParams);
-    const auth = await authRoute(url.pathname, body, ip, req);
+    const auth = await authRoute(path, body, ip, req);
     if (auth) return send(auth);
     const me = await sessionUser(req);
-    const createAccountMatch = /^\/api\/admin\/accounts\/(individual|institution)$/.exec(url.pathname);
+    const createAccountMatch = /^\/api\/admin\/accounts\/(individual|institution)$/.exec(path);
     if (method === "POST" && createAccountMatch && me) {
       const email = normEmail(body.loginEmail);
       const password = String(body.password || "");
@@ -904,7 +906,7 @@ async function handle(req, res) {
       if (result.status >= 300) await deleteUser(user.id);
       return send(result);
     }
-    if (method === "POST" && url.pathname === "/api/admin/accounts/invite" && me) {
+    if (method === "POST" && path === "/api/admin/accounts/invite" && me) {
       const email = normEmail(body.email);
       const password = String(body.password || "");
       const exists = email ? await findUser(email) : void 0;
@@ -913,7 +915,7 @@ async function handle(req, res) {
       if (result.status < 300 && email && !exists) await createUser(email, password);
       return send(result);
     }
-    send(await handler(method, url.pathname, { user: me, body, query }));
+    send(await handler(method, path, { user: me, body, query }));
   } catch (e) {
     console.error(e);
     send(error(e?.message === "Payload too large" ? "Payload too large" : "Something went wrong.", e?.message === "Payload too large" ? 413 : 500));
