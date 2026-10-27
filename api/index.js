@@ -782,6 +782,8 @@ if (existsSync(".env")) process.loadEnvFile(".env");
 var scrypt = promisify(scryptCb);
 var SESSION_MS = 7 * 24 * 3600 * 1e3;
 var MIN_PASSWORD = 8;
+var DEMO_SEED = "kgga-showcase-v1";
+var DEMO_PASSWORD = "KGGA-Demo-2026!";
 var upsertUser = (u) => pool().query(
   `INSERT INTO auth_users (id, email, name, salt, hash) VALUES ($1,$2,$3,$4,$5)
    ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, salt = EXCLUDED.salt, hash = EXCLUDED.hash`,
@@ -861,11 +863,194 @@ async function seedSuperAdmin() {
   if (items[0]) await db.update("admins", [{ id: items[0].id, record }]);
   else await db.add("admins", [record]);
 }
+async function ensureDemoUser(email, name) {
+  const existing = await findUser(email);
+  if (!existing) return createUser(email, DEMO_PASSWORD, name);
+  const updated = { ...existing, name, ...await hashPassword(DEMO_PASSWORD) };
+  await upsertUser(updated);
+  return updated;
+}
+async function ensureDemoRecord(table2, filter, record) {
+  const { items } = await db.list(table2, { filter, limit: 1 });
+  if (items[0]) {
+    await db.update(table2, [{ id: items[0].id, record: { ...items[0], ...record } }]);
+    return { id: items[0].id, ...record };
+  }
+  const [id] = await db.add(table2, [record]);
+  return { id, ...record };
+}
+async function seedDemoData() {
+  if (process.env.DEMO_MODE !== "true") return;
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    throw new Error("DEMO_MODE is only available in a local development environment.");
+  }
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl || !["localhost", "127.0.0.1", "::1"].includes(new URL(databaseUrl).hostname)) {
+    throw new Error("DEMO_MODE requires a local PostgreSQL DATABASE_URL.");
+  }
+  const adminUser = await ensureDemoUser("demo.admin@kgga.example", "KGGA Demo Admin");
+  const staffUser = await ensureDemoUser("demo.staff@kgga.example", "KGGA Demo Staff");
+  const memberUser = await ensureDemoUser("demo.member@kgga.example", "Amina Wanjiku");
+  await ensureDemoRecord("admins", { demoSeed: DEMO_SEED, demoRole: "admin" }, {
+    userId: adminUser.id,
+    email: adminUser.email,
+    name: adminUser.name,
+    status: "active",
+    isSuperAdmin: true,
+    canEdit: true,
+    canManageAdmins: true,
+    demoSeed: DEMO_SEED,
+    demoRole: "admin"
+  });
+  const institution = await ensureDemoRecord("institutions", { demoSeed: DEMO_SEED, demoRole: "institution" }, {
+    userId: staffUser.id,
+    name: "KGGA Demo Unit",
+    email: staffUser.email,
+    county: "Nairobi",
+    principalName: "Grace Njeri",
+    demoSeed: DEMO_SEED,
+    demoRole: "institution"
+  });
+  const today2 = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const expiry = /* @__PURE__ */ new Date();
+  expiry.setUTCDate(expiry.getUTCDate() + 365);
+  const subscriptionExpiry = expiry.toISOString().slice(0, 10);
+  const member = await ensureDemoRecord("members", { demoSeed: DEMO_SEED, demoRole: "member" }, {
+    ownerUserId: memberUser.id,
+    name: "Amina Wanjiku",
+    email: memberUser.email,
+    phone: "+254 700 000 101",
+    dob: "1992-04-03",
+    branch: "Bravo",
+    region: "Nairobi",
+    guardianName: "",
+    status: "active",
+    joinedDate: today2,
+    subscriptionExpiry,
+    source: "self",
+    memberType: "adult",
+    membershipNo: "KGGA-DEMO-001",
+    demoSeed: DEMO_SEED,
+    demoRole: "member"
+  });
+  const student = await ensureDemoRecord("members", { demoSeed: DEMO_SEED, demoRole: "student-one" }, {
+    name: "Zuri Njeri",
+    email: "zuri.njeri@example.test",
+    phone: "+254 700 000 102",
+    dob: "2013-04-23",
+    branch: "Girl Guides",
+    region: "Nairobi",
+    status: "active",
+    joinedDate: today2,
+    subscriptionExpiry,
+    institutionId: institution.id,
+    institutionName: institution.name,
+    source: "institution",
+    memberType: "youth",
+    membershipNo: "KGGA-DEMO-002",
+    demoSeed: DEMO_SEED,
+    demoRole: "student-one"
+  });
+  await ensureDemoRecord("members", { demoSeed: DEMO_SEED, demoRole: "student-two" }, {
+    name: "Asha Mwangi",
+    email: "asha.mwangi@example.test",
+    phone: "+254 700 000 103",
+    dob: "2017-07-14",
+    branch: "Brownies",
+    region: "Nairobi",
+    status: "active",
+    joinedDate: today2,
+    subscriptionExpiry,
+    institutionId: institution.id,
+    institutionName: institution.name,
+    source: "institution",
+    memberType: "youth",
+    membershipNo: "KGGA-DEMO-003",
+    demoSeed: DEMO_SEED,
+    demoRole: "student-two"
+  });
+  const eventOneDate = /* @__PURE__ */ new Date();
+  eventOneDate.setUTCDate(eventOneDate.getUTCDate() + 14);
+  const eventTwoDate = /* @__PURE__ */ new Date();
+  eventTwoDate.setUTCDate(eventTwoDate.getUTCDate() + 30);
+  const eventOne = await ensureDemoRecord("events", { demoSeed: DEMO_SEED, demoRole: "event-one" }, {
+    title: "Nairobi Leadership Training",
+    date: eventOneDate.toISOString().slice(0, 10),
+    location: "Nairobi HQ",
+    description: "A practical workshop in leadership, teamwork, and guiding skills.",
+    demoSeed: DEMO_SEED,
+    demoRole: "event-one"
+  });
+  await ensureDemoRecord("events", { demoSeed: DEMO_SEED, demoRole: "event-two" }, {
+    title: "Community Conservation Day",
+    date: eventTwoDate.toISOString().slice(0, 10),
+    location: "Karura Forest",
+    description: "Join local members for a day of conservation activities.",
+    demoSeed: DEMO_SEED,
+    demoRole: "event-two"
+  });
+  const paidInvoice = await ensureDemoRecord("transactions", { demoSeed: DEMO_SEED, demoRole: "paid-invoice" }, {
+    memberId: member.id,
+    memberName: member.name,
+    type: "invoice",
+    amount: 2500,
+    description: "Annual Membership Subscription",
+    date: today2,
+    status: "paid",
+    demoSeed: DEMO_SEED,
+    demoRole: "paid-invoice"
+  });
+  await ensureDemoRecord("transactions", { demoSeed: DEMO_SEED, demoRole: "receipt" }, {
+    memberId: member.id,
+    memberName: member.name,
+    type: "receipt",
+    amount: 2500,
+    description: "Annual Membership Subscription",
+    date: today2,
+    status: "paid",
+    linkedInvoiceId: paidInvoice.id,
+    demoSeed: DEMO_SEED,
+    demoRole: "receipt"
+  });
+  await ensureDemoRecord("transactions", { demoSeed: DEMO_SEED, demoRole: "pending-invoice" }, {
+    memberId: member.id,
+    memberName: member.name,
+    type: "invoice",
+    amount: 1200,
+    description: "Training Contribution",
+    date: today2,
+    status: "pending",
+    demoSeed: DEMO_SEED,
+    demoRole: "pending-invoice"
+  });
+  for (const [event, participant] of [[eventOne, member], [eventOne, student]]) {
+    await ensureDemoRecord("participations", { demoSeed: DEMO_SEED, eventId: event.id, memberId: participant.id }, {
+      eventId: event.id,
+      memberId: participant.id,
+      memberName: participant.name,
+      eventTitle: event.title,
+      date: today2,
+      demoSeed: DEMO_SEED
+    });
+  }
+  await ensureDemoRecord("communications", { demoSeed: DEMO_SEED, demoRole: "notice" }, {
+    type: "notice",
+    subject: "Welcome to the KGGA Demo Portal",
+    body: "This is sample content for showcasing the membership portal. No real member data is included.",
+    audience: "all",
+    recipientCount: 3,
+    date: today2,
+    demoSeed: DEMO_SEED,
+    demoRole: "notice"
+  });
+  console.log("KGGA local demo data is ready: demo.admin@kgga.example, demo.staff@kgga.example, demo.member@kgga.example");
+}
 var ready;
 function init() {
   ready ??= (async () => {
     await migrate();
     await seedSuperAdmin();
+    await seedDemoData();
   })().catch((e) => {
     ready = void 0;
     throw e;

@@ -17,6 +17,20 @@ runtime, not by a package you install yourself.
 
 On startup the server creates any missing tables (one `(id uuid, data jsonb, created_at)` table per backend table, plus `auth_users` and `auth_sessions`) and seeds the Super Admin.
 
+### Local showcase data
+
+To create local demo accounts and sample records, add `DEMO_MODE=true` to `.env` and use a local PostgreSQL database in `DATABASE_URL`. Demo mode is refused in production/Vercel and with a non-local database URL. Restart `npm run dev`; the seed is repeatable and refreshes the sample users' passwords to the values below.
+
+All three demo accounts use the password `KGGA-Demo-2026!`:
+
+| Portal | Login email | What to explore |
+|---|---|---|
+| Admin / Super Admin | `demo.admin@kgga.example` | Dashboard, member register, events, notices, and reports |
+| Institution staff | `demo.staff@kgga.example` | Two-student roster, event registration, and notices |
+| Individual member | `demo.member@kgga.example` | Profile, statement, event participation, and notices |
+
+The synthetic dataset includes Amina Wanjiku as an individual member, Zuri Njeri and Asha Mwangi in KGGA Demo Unit, two upcoming events, event participations, paid and pending transactions, and a broadcast notice. These credentials and records are for local showcases only; do not enable demo mode on a deployed system.
+
 ## Project layout
 
 ```
