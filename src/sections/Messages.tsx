@@ -4,10 +4,11 @@ import { api } from '../local-client';
 import type { Communication } from '../types';
 import { MEMBERSHIP_CATEGORY_NAMES } from '../../membership-categories';
 import { downloadCsv } from '../csv';
+import Notices from './Notices';
 
 const BRANCHES = MEMBERSHIP_CATEGORY_NAMES;
 
-export default function Messages({ canEdit }: { canEdit: boolean }) {
+export default function Messages({ canEdit, isSuperAdmin }: { canEdit: boolean; isSuperAdmin: boolean }) {
   const [items, setItems] = useState<Communication[]>([]);
   const [loading, setLoading] = useState(true);
   const [subject, setSubject] = useState('');
@@ -15,6 +16,11 @@ export default function Messages({ canEdit }: { canEdit: boolean }) {
   const [audience, setAudience] = useState('all');
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState('');
+  const [noticeTitle, setNoticeTitle] = useState('');
+  const [noticeBody, setNoticeBody] = useState('');
+  const [publishingNotice, setPublishingNotice] = useState(false);
+  const [noticeRefresh, setNoticeRefresh] = useState(0);
+  const [publishFeedback, setPublishFeedback] = useState('');
 
   const load = async () => {
     const r = await api.get('/api/admin/messages');
@@ -41,6 +47,23 @@ export default function Messages({ canEdit }: { canEdit: boolean }) {
     setTimeout(() => setNotice(''), 5000);
   };
 
+  const publishNotice = async () => {
+    if (!noticeTitle.trim() || !noticeBody.trim()) return;
+    setPublishingNotice(true);
+    setPublishFeedback('');
+    try {
+      await api.post('/api/admin/notices', { subject: noticeTitle, body: noticeBody });
+      setNoticeTitle('');
+      setNoticeBody('');
+      setNoticeRefresh((value) => value + 1);
+      setPublishFeedback('Notice published to all members and admins.');
+    } catch (error: any) {
+      setPublishFeedback(error?.response?.data?.error || 'Could not publish notice.');
+    } finally {
+      setPublishingNotice(false);
+    }
+  };
+
   return (
     <div>
       <div className="topbar">
@@ -50,6 +73,16 @@ export default function Messages({ canEdit }: { canEdit: boolean }) {
         </div>
         <button className="btn btn-secondary" onClick={exportMessages} disabled={loading || items.length === 0}><Download size={15} /> Download History</button>
       </div>
+
+      {isSuperAdmin && <div className="card" style={{ marginBottom: 24 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Publish Notice</h3>
+        <div className="field"><label className="field-label">Title</label><input className="input" value={noticeTitle} onChange={(e) => setNoticeTitle(e.target.value)} /></div>
+        <div className="field"><label className="field-label">Notice</label><textarea className="input" rows={3} value={noticeBody} onChange={(e) => setNoticeBody(e.target.value)} /></div>
+        {publishFeedback && <p style={{ color: publishFeedback.startsWith('Could not') ? 'var(--danger)' : 'var(--accent)', fontSize: 13, marginBottom: 10 }}>{publishFeedback}</p>}
+        <button className="btn btn-primary" onClick={publishNotice} disabled={publishingNotice || !noticeTitle.trim() || !noticeBody.trim()}>{publishingNotice ? 'Publishing…' : 'Publish to Everyone'}</button>
+      </div>}
+
+      <div style={{ marginBottom: 24 }}><Notices refreshKey={noticeRefresh} /></div>
 
       {canEdit ? (
         <div className="card" style={{ marginBottom: 24 }}>

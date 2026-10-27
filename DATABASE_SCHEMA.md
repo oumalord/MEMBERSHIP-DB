@@ -122,15 +122,15 @@ Join table: which members registered for which events.
 | date | string (YYYY-MM-DD) | date the registration was recorded |
 
 ## `communications`
-Log of reminders and bulk messages sent.
+Log of reminders, bulk messages, and superadmin notices.
 
 | Field | Type | Notes |
 |---|---|---|
 | id | string (PK) | auto-generated |
-| type | `'reminder'` \| `'bulk'` | |
+| type | `'reminder'` \| `'bulk'` \| `'notice'` | |
 | subject | string | |
 | body | string | |
-| audience | string | `all`, `branch:<name>`, or `status:<status>` |
+| audience | string | `all`, `branch:<name>`, or `status:<status>`; notices use `all` |
 | recipientCount | number | |
 | date | string (YYYY-MM-DD) | |
 

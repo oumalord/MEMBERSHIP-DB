@@ -13,6 +13,7 @@ import AdminAccounts from './sections/AdminAccounts';
 import AccountRegistration from './sections/AccountRegistration';
 import IndividualDashboard from './sections/IndividualDashboard';
 import InstitutionDashboard from './sections/InstitutionDashboard';
+import Notices from './sections/Notices';
 import { LayoutDashboard, Users, Receipt, Mail, CalendarDays, BarChart3, ShieldCheck, LogOut, Menu, X, Settings as SettingsIcon, type LucideIcon } from 'lucide-react';
 import type { AdminAccount as AdminAccountRecord, Institution, Member } from './types';
 
@@ -165,11 +166,11 @@ export default function App() {
         user={{ name: adminMe.name || adminMe.email, role: adminMe.isSuperAdmin ? 'Super Admin' : canEdit ? 'Admin · Edit' : 'Admin · View Only' }}
         onSignOut={handleSignOut}
       >
-        {adminTab === 'dashboard' && <Dashboard />}
+        {adminTab === 'dashboard' && <><Notices /><Dashboard /></>}
         {adminTab === 'members' && <Members canEdit={canEdit} />}
         {adminTab === 'registrations' && canEdit && <AccountRegistration />}
         {adminTab === 'transactions' && <Transactions canEdit={canEdit} />}
-        {adminTab === 'messages' && <Messages canEdit={canEdit} />}
+        {adminTab === 'messages' && <Messages canEdit={canEdit} isSuperAdmin={adminMe.isSuperAdmin} />}
         {adminTab === 'events' && <Events canEdit={canEdit} />}
         {adminTab === 'reports' && <Reports />}
         {adminTab === 'accounts' && canManageAdmins && <AdminAccounts isSuperAdmin={adminMe.isSuperAdmin} />}
@@ -188,6 +189,14 @@ function Shell({ title, subtitle, nav = [], activeKey, onNavigate, user, onSignO
   user?: { name: string; role: string }; onSignOut: () => void; children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const { branding } = useBranding();
+  const mainStyle = branding.logo ? {
+    backgroundImage: `linear-gradient(rgba(245,246,250,0.93), rgba(245,246,250,0.93)), url("${branding.logo}")`,
+    backgroundPosition: 'center, center',
+    backgroundRepeat: 'no-repeat, no-repeat',
+    backgroundSize: 'cover, min(65vw, 560px) auto',
+    backgroundAttachment: 'fixed, fixed',
+  } : undefined;
 
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : '';
@@ -221,7 +230,7 @@ function Shell({ title, subtitle, nav = [], activeKey, onNavigate, user, onSignO
           <SignOutButton onClick={onSignOut} />
         </div>
       </aside>
-      <main className="main">{children}</main>
+      <main className="main" style={mainStyle}>{children}</main>
     </div>
   );
 }

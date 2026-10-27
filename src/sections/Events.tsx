@@ -4,7 +4,9 @@ import { api } from '../local-client';
 import type { EventItem, Member, Participation } from '../types';
 import { downloadCsv } from '../csv';
 
-export default function Events({ canEdit }: { canEdit: boolean }) {
+type EventsMode = 'admin' | 'institution' | 'individual';
+
+export default function Events({ canEdit = false, mode = 'admin' }: { canEdit?: boolean; mode?: EventsMode }) {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -12,11 +14,21 @@ export default function Events({ canEdit }: { canEdit: boolean }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [participants, setParticipants] = useState<Record<string, Participation[]>>({});
   const [selectMember, setSelectMember] = useState('');
+  const [registering, setRegistering] = useState<string | null>(null);
+  const [registered, setRegistered] = useState<Record<string, boolean>>({});
+  const [registrationError, setRegistrationError] = useState('');
 
   const load = async () => {
-    const [er, mr] = await Promise.all([api.get('/api/admin/events'), api.get('/api/admin/members')]);
+    const er = await api.get(mode === 'admin' ? '/api/admin/events' : '/api/events');
     setEvents(er.data.items || []);
-    setMembers(mr.data.items || []);
+    if (mode === 'individual') {
+      const pr = await api.get('/api/individual/participations');
+      setRegistered(Object.fromEntries((pr.data.items || []).map((p: Participation) => [p.eventId, true])));
+    }
+    if (mode === 'institution' || (mode === 'admin' && canEdit)) {
+      const mr = await api.get(mode === 'institution' ? '/api/institution/members' : '/api/admin/members');
+      setMembers(mr.data.items || []);
+    }
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -38,11 +50,28 @@ export default function Events({ canEdit }: { canEdit: boolean }) {
   };
 
   const register = async (eventId: string) => {
-    if (!selectMember) return;
-    await api.post(`/api/admin/events/${eventId}/participants`, { memberId: selectMember });
-    const r = await api.get(`/api/admin/events/${eventId}/participants`);
-    setParticipants((p) => ({ ...p, [eventId]: r.data.items || [] }));
-    setSelectMember('');
+    if (mode === 'institution' && !selectMember) return;
+    setRegistering(eventId);
+    setRegistrationError('');
+    try {
+      if (mode === 'admin') {
+        await api.post(`/api/admin/events/${eventId}/participants`, { memberId: selectMember });
+        const r = await api.get(`/api/admin/events/${eventId}/participants`);
+        setParticipants((p) => ({ ...p, [eventId]: r.data.items || [] }));
+        setSelectMember('');
+      } else {
+        await api.post(`/api/events/${eventId}/register`, mode === 'institution' ? { memberId: selectMember } : {});
+        const key = mode === 'institution' ? `${eventId}:${selectMember}` : eventId;
+        setRegistered((current) => ({ ...current, [key]: true }));
+      }
+    } catch (error: any) {
+      if (error?.response?.status === 409 && mode === 'institution') {
+        setRegistered((current) => ({ ...current, [`${eventId}:${selectMember}`]: true }));
+      }
+      setRegistrationError(error?.response?.data?.error || 'Could not register for this event.');
+    } finally {
+      setRegistering(null);
+    }
   };
 
   return (
@@ -50,26 +79,38 @@ export default function Events({ canEdit }: { canEdit: boolean }) {
       <div className="topbar">
         <div>
           <div className="page-title">Events</div>
-          <div className="page-sub">Schedule activities and track participation</div>
+          <div className="page-sub">{mode === 'admin' ? 'Schedule activities and track participation' : 'Upcoming activities and registration'}</div>
         </div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {mode === 'admin' && <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={exportEvents} disabled={loading || events.length === 0}><Download size={15} /> Download CSV</button>
           {canEdit && <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Schedule Event</button>}
-        </div>
+        </div>}
       </div>
 
       {loading ? <div className="empty-state">Loading…</div> : events.length === 0 ? <div className="empty-state">No events scheduled yet.</div> : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {events.map((ev) => (
             <div className="card" key={ev.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => toggle(ev.id)}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: mode === 'admin' ? 'pointer' : 'default' }} onClick={() => mode === 'admin' && toggle(ev.id)}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{ev.title}</div>
                   <div style={{ color: 'var(--muted)', fontSize: 13 }}>{ev.date} {ev.location ? `· ${ev.location}` : ''}</div>
                 </div>
-                <span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 600 }}>{expanded === ev.id ? 'Hide' : 'Manage'} →</span>
+                {mode === 'admin' && <span style={{ color: 'var(--accent)', fontSize: 12.5, fontWeight: 600 }}>{expanded === ev.id ? 'Hide' : 'Manage'} →</span>}
               </div>
-              {expanded === ev.id && (
+              {mode !== 'admin' && ev.description && <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 12 }}>{ev.description}</p>}
+              {mode !== 'admin' && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {mode === 'institution' && <select className="input" style={{ maxWidth: 280 }} value={selectMember} onChange={(e) => setSelectMember(e.target.value)}>
+                    <option value="">Select member to register…</option>
+                    {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>}
+                  <button className="btn btn-secondary btn-sm" onClick={() => register(ev.id)} disabled={registering === ev.id || (mode === 'institution' && (!selectMember || registered[`${ev.id}:${selectMember}`])) || (mode === 'individual' && registered[ev.id])}>
+                    {(mode === 'institution' ? registered[`${ev.id}:${selectMember}`] : registered[ev.id]) ? 'Registered' : registering === ev.id ? 'Registering…' : 'Register'}
+                  </button>
+                </div>
+              )}
+              {mode === 'admin' && expanded === ev.id && (
                 <div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
                   {ev.description && <p style={{ fontSize: 13.5, color: 'var(--muted)', marginBottom: 14 }}>{ev.description}</p>}
                   {canEdit && (
@@ -93,6 +134,8 @@ export default function Events({ canEdit }: { canEdit: boolean }) {
           ))}
         </div>
       )}
+
+      {registrationError && <p style={{ color: 'var(--danger)', fontSize: 13, marginTop: 12 }}>{registrationError}</p>}
 
       {showAdd && <AddEventModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
     </div>

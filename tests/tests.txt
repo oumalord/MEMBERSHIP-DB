@@ -64,3 +64,17 @@ Steps:
 3. Leave the name field empty and click "Create Account"
 
 Expected: A validation message is shown and the sign-up form remains open without creating an account.
+
+## Test 6 - Members and institution staff register for events and see notices
+Viewport: desktop
+Covers: event listing, individual self-registration, institution-scoped student registration, superadmin notices
+Description: Verifies event registration is available to members and institution staff, and superadmin notices are visible across portals.
+
+Steps:
+1. Sign in as Super Admin, schedule an event, then publish a notice from Messages
+2. Sign in as an individual member and register for the event
+3. Refresh the member portal and check the event shows as registered and the notice is visible
+4. Sign in as an institution account with at least one student, open Events, select that student, and register them
+5. Sign in as another admin account and open Messages
+
+Expected: The member can self-register once, institution staff can register students from their own roster, and the notice is visible to the member, institution account, and admin account. Only the Super Admin can publish notices.

@@ -345,6 +345,38 @@ var handler = router({
     const { items } = await db.list("participations", { filter: { memberId: mems[0].id }, limit: 200 });
     return json({ items });
   }],
+  "GET /api/events": [requireAuth(), async () => {
+    const { items } = await db.list("events", { limit: 200 });
+    return json({ items: items.filter((event) => event.date >= today()).sort((a, b) => a.date < b.date ? -1 : 1) });
+  }],
+  "POST /api/events/:id/register": [requireAuth(), async (ctx) => {
+    const [event] = await db.get("events", [ctx.params.id]);
+    if (!event) return error("Event not found", 404);
+    if (event.date < today()) return error("Registration is closed for past events", 400);
+    const institution = await findInstitution(ctx.user.userId);
+    let member;
+    if (institution) {
+      const body = ctx.body;
+      if (!body.memberId) return error("memberId is required", 400);
+      const [student] = await db.get("members", [body.memberId]);
+      if (!student || student.institutionId !== institution.id) return error("Student not found", 404);
+      member = student;
+    } else {
+      const { items } = await db.list("members", { filter: { ownerUserId: ctx.user.userId }, limit: 1 });
+      member = items[0];
+      if (!member) return error("No individual account found for this login", 403);
+    }
+    const { items: existing } = await db.list("participations", { filter: { eventId: ctx.params.id, memberId: member.id }, limit: 1 });
+    if (existing.length > 0) return error("This member is already registered for the event", 409);
+    const record = { eventId: ctx.params.id, memberId: member.id, memberName: member.name, eventTitle: event.title, date: today() };
+    const [id] = await db.add("participations", [record]);
+    if (!id) return error("Failed to register participant", 500);
+    return json({ id, ...record }, 201);
+  }],
+  "GET /api/notices": [requireAuth(), async () => {
+    const { items } = await db.list("communications", { filter: { type: "notice" }, limit: 200 });
+    return json({ items: items.sort((a, b) => a.date < b.date ? 1 : -1) });
+  }],
   "GET /api/institution/me": [requireAuth(), async (ctx) => {
     const inst = await findInstitution(ctx.user.userId);
     if (!inst) return error("No institution account found for this login", 404);
@@ -662,6 +694,15 @@ var handler = router({
   "GET /api/admin/messages": [requireAuth(), requireAdminSession(), async () => {
     const { items } = await db.list("communications", { limit: 200 });
     return json({ items: items.sort((a, b) => a.date < b.date ? 1 : -1) });
+  }],
+  "POST /api/admin/notices": [requireAuth(), requireAdminSession(), requireSuperAdmin(), async (ctx) => {
+    const body = ctx.body;
+    if (!body.subject?.trim() || !body.body?.trim()) return error("Title and notice are required", 400);
+    const { items: members } = await db.list("members", { limit: 500 });
+    const record = { type: "notice", subject: body.subject.trim(), body: body.body.trim(), audience: "all", recipientCount: members.length, date: today() };
+    const [id] = await db.add("communications", [record]);
+    if (!id) return error("Failed to publish notice", 500);
+    return json({ id, ...record }, 201);
   }],
   "POST /api/admin/messages/bulk": [requireAuth(), requireAdminSession(), requireEditRights(), async (ctx) => {
     const body = ctx.body;

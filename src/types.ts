@@ -71,7 +71,7 @@ export interface Participation {
 
 export interface Communication {
   id: string;
-  type: 'reminder' | 'bulk';
+  type: 'reminder' | 'bulk' | 'notice';
   subject: string;
   body: string;
   audience: string;

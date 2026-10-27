@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../local-client';
 import type { Member, Transaction, Participation } from '../types';
+import Events from './Events';
+import Notices from './Notices';
 
 export default function IndividualDashboard({ member, onUpdated }: { member: Member; onUpdated: (m: Member) => void }) {
   const [tx, setTx] = useState<Transaction[]>([]);
@@ -85,6 +87,9 @@ export default function IndividualDashboard({ member, onUpdated }: { member: Mem
           </table>
         )}
       </div>
+
+      <div style={{ marginTop: 24 }}><Events mode="individual" /></div>
+      <div style={{ marginTop: 24 }}><Notices /></div>
     </div>
   );
 }

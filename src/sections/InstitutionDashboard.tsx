@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { api } from '../local-client';
 import type { Member, Category } from '../types';
 import { MEMBERSHIP_CATEGORIES, MEMBERSHIP_CATEGORY_NAMES } from '../../membership-categories';
+import Events from './Events';
+import Notices from './Notices';
 
 const DEFAULT_BRANCHES = MEMBERSHIP_CATEGORY_NAMES;
 const UNIT_AGES = MEMBERSHIP_CATEGORIES;
 
 export default function InstitutionDashboard() {
-  const [tab, setTab] = useState<'members' | 'categories'>('members');
+  const [tab, setTab] = useState<'members' | 'categories' | 'events'>('members');
   const [members, setMembers] = useState<Member[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,8 +47,8 @@ export default function InstitutionDashboard() {
     <div>
       <div className="topbar">
         <div>
-          <div className="page-title">Institution Dashboard</div>
-          <div className="page-sub">{members.length} registered students</div>
+          <div className="page-title">{tab === 'events' ? 'Events' : 'Institution Dashboard'}</div>
+          <div className="page-sub">{tab === 'events' ? 'Register your students for upcoming activities' : `${members.length} registered students`}</div>
         </div>
         {tab === 'members' && <button className="btn btn-primary" onClick={() => setShowAdd(true)}>+ Add Student</button>}
       </div>
@@ -54,9 +56,10 @@ export default function InstitutionDashboard() {
       <div className="chip-row" style={{ marginBottom: 20 }}>
         <button className={`chip ${tab === 'members' ? 'active' : ''}`} onClick={() => setTab('members')}>Students</button>
         <button className={`chip ${tab === 'categories' ? 'active' : ''}`} onClick={() => setTab('categories')}>Categories</button>
+        <button className={`chip ${tab === 'events' ? 'active' : ''}`} onClick={() => setTab('events')}>Events</button>
       </div>
 
-      {tab === 'members' ? (
+      {tab === 'events' ? <Events mode="institution" /> : tab === 'members' ? (
         <div className="card" style={{ padding: 0 }}>
           {loading ? <div className="empty-state">Loading…</div> : members.length === 0 ? <div className="empty-state">No students added yet.</div> : (
             <table className="data-table">
@@ -102,6 +105,7 @@ export default function InstitutionDashboard() {
       )}
 
       {showAdd && <AddStudentModal onClose={() => setShowAdd(false)} onSaved={() => { setShowAdd(false); load(); }} />}
+      <div style={{ marginTop: 24 }}><Notices /></div>
     </div>
   );
 }
